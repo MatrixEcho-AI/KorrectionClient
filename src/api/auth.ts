@@ -8,3 +8,6 @@ export const login = (phone: string, code: string) =>
     code: number;
     data: { token: string; user: { id: number; phone: string } };
   }>;
+
+export const getMe = () =>
+  client.get('/api/auth/me') as Promise<{ code: number; data: { id: number; phone: string } }>;

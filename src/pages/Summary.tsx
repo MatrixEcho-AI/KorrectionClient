@@ -37,16 +37,9 @@ export default function Summary() {
       if (res.data.tags) {
         setSelectedTagIds(res.data.tags.map((t: any) => t.id));
       }
-      // 找到科目并加载标签
-      let currId = res.data.category_id;
-      let curr = categories.find((c) => c.id === currId);
-      while (curr && curr.parent_id !== 0) {
-        currId = curr.parent_id;
-        curr = categories.find((c) => c.id === currId);
-      }
-      const sid = curr?.id || res.data.category_id;
-      if (sid) {
-        const tRes = await getTags(sid);
+      // 加载当前科目的标签
+      if (res.data.subject_id) {
+        const tRes = await getTags(res.data.subject_id);
         setTags(tRes.data);
       }
     } catch (err: any) {

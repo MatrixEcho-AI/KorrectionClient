@@ -57,6 +57,7 @@ export default function Login() {
     try {
       const res = await login(phone, code);
       await Preferences.set({ key: 'token', value: res.data.token });
+      await Preferences.set({ key: 'user', value: JSON.stringify(res.data.user) });
       setToken(res.data.token);
       setUser(res.data.user);
     } catch (err: any) {

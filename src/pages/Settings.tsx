@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { Preferences } from '@capacitor/preferences';
-import { NavBar, List, Switch, Toast, Dialog } from 'antd-mobile';
-import { RightOutline } from 'antd-mobile-icons';
+import { NavBar, List, Switch, Toast, Dialog, Button } from 'antd-mobile';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -48,17 +47,15 @@ export default function Settings() {
         </List>
 
         <List header="关于">
-          <List.Item extra={<RightOutline />} onClick={() => Toast.show({ content: 'Korrection v1.0.0' })}>
+          <List.Item onClick={() => Toast.show({ content: 'Korrection v1.0.0' })}>
             关于 App
           </List.Item>
         </List>
 
         <div style={{ padding: 24 }}>
-          <List>
-            <List.Item onClick={handleLogout} style={{ color: '#ff3141', justifyContent: 'center' }}>
-              退出账号
-            </List.Item>
-          </List>
+          <Button block color="danger" onClick={handleLogout}>
+            退出账号
+          </Button>
         </div>
       </div>
     </div>

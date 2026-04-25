@@ -12,6 +12,7 @@ export interface Question {
   id: number;
   user_id: number;
   category_id: number;
+  subject_id: number;
   status: 'photo' | 'summary' | 'review' | 'redo' | 'completed' | 'deleted';
   reason_text?: string;
   review_count: number;
