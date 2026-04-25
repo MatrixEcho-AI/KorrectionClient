@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getQuestion, deleteQuestion, type Question } from '@/api/questions';
+import { NavBar, Button, SpinLoading, Image, Tag, Toast, Dialog } from 'antd-mobile';
 
 const statusMap: Record<string, string> = {
   photo: '拍照',
@@ -40,19 +41,17 @@ export default function QuestionDetail() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <SpinLoading color="primary" />
       </div>
     );
   }
 
   if (!q) {
     return (
-      <div className="flex h-full flex-col items-center justify-center">
-        <p className="text-gray-400">题目不存在</p>
-        <button onClick={() => navigate('/')} className="mt-4 text-primary">
-          返回首页
-        </button>
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ color: '#999' }}>题目不存在</div>
+        <Button style={{ marginTop: 16 }} onClick={() => navigate('/')}>返回首页</Button>
       </div>
     );
   }
@@ -74,30 +73,31 @@ export default function QuestionDetail() {
   };
 
   const handleDelete = async () => {
-    if (!confirm('确定删除这道题？可在回收站恢复。')) return;
+    const result = await Dialog.confirm({ content: '确定删除这道题？可在回收站恢复。' });
+    if (!result) return;
     await deleteQuestion(Number(id));
+    Toast.show({ content: '已删除', icon: 'success' });
     navigate('/');
   };
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center border-b px-4 py-3">
-        <button onClick={() => navigate(-1)} className="text-gray-500">
-          ←
-        </button>
-        <h1 className="mx-auto text-lg font-bold">题目详情</h1>
-        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-          {statusMap[q.status]}
-        </span>
-      </header>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <NavBar
+        onBack={() => navigate(-1)}
+        right={
+          <Tag color="default" fill="outline">{statusMap[q.status]}</Tag>
+        }
+      >
+        题目详情
+      </NavBar>
 
-      <div className="flex-1 overflow-y-auto p-4">
+      <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
         {detail?.images?.map((img: any) => (
-          <div key={img.id} className="mb-4 rounded-lg border bg-white p-3">
-            <div className="mb-1 text-xs font-medium text-gray-500">{typeLabel[img.image_type]}</div>
-            <img src={img.image_url} alt="" className="h-48 w-full rounded-md object-contain" />
+          <div key={img.id} style={{ marginBottom: 16, borderRadius: 8, border: '1px solid #eee', padding: 12, background: '#fff' }}>
+            <div style={{ fontSize: 12, fontWeight: 500, color: '#666', marginBottom: 8 }}>{typeLabel[img.image_type]}</div>
+            <Image src={img.image_url} style={{ width: '100%', maxHeight: 192, borderRadius: 4 }} fit="contain" />
             {img.ocr_text && (
-              <div className="mt-2 rounded bg-gray-50 p-2 text-xs text-gray-600 whitespace-pre-wrap">
+              <div style={{ marginTop: 8, padding: 8, background: '#f5f5f5', borderRadius: 4, fontSize: 12, color: '#666', whiteSpace: 'pre-wrap' }}>
                 {img.ocr_text}
               </div>
             )}
@@ -105,38 +105,36 @@ export default function QuestionDetail() {
         ))}
 
         {q.reason_text && (
-          <div className="mb-4 rounded-lg border bg-white p-3">
-            <div className="text-xs font-medium text-gray-500">错题原因</div>
-            <div className="mt-1 text-sm text-gray-800">{q.reason_text}</div>
+          <div style={{ marginBottom: 16, borderRadius: 8, border: '1px solid #eee', padding: 12, background: '#fff' }}>
+            <div style={{ fontSize: 12, fontWeight: 500, color: '#666' }}>错题原因</div>
+            <div style={{ marginTop: 4, fontSize: 14, color: '#333' }}>{q.reason_text}</div>
           </div>
         )}
 
         {detail?.tags?.length > 0 && (
-          <div className="mb-4 flex flex-wrap gap-2">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
             {detail.tags.map((t: any) => (
-              <span key={t.id} className="rounded-full bg-blue-50 px-3 py-1 text-xs text-blue-700">
-                {t.name}
-              </span>
+              <Tag key={t.id} color="primary" fill="outline">{t.name}</Tag>
             ))}
           </div>
         )}
 
-        <div className="mb-4 text-xs text-gray-500">
+        <div style={{ fontSize: 12, color: '#999' }}>
           <div>章节: {q.category_name || '-'}</div>
           <div>复习次数: {q.review_count}</div>
           <div>最后复盘: {q.last_review_at ? new Date(q.last_review_at).toLocaleString() : '-'}</div>
         </div>
       </div>
 
-      <div className="border-t p-4 space-y-2">
-        <button onClick={nextAction} className="w-full rounded-lg bg-primary py-3 font-medium text-white">
+      <div style={{ padding: 12, borderTop: '1px solid #eee', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <Button block color="primary" size="large" onClick={nextAction}>
           {q.status === 'photo' && '去总结'}
           {q.status === 'summary' && '去复盘'}
           {(q.status === 'review' || q.status === 'redo' || q.status === 'completed') && '复盘 / 重做'}
-        </button>
-        <button onClick={handleDelete} className="w-full rounded-lg bg-gray-100 py-2 text-sm text-danger">
+        </Button>
+        <Button block fill="outline" size="large" style={{ color: '#ff3141' }} onClick={handleDelete}>
           删除题目
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -2,9 +2,23 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getQuestions, type Question } from '@/api/questions';
 import { exportPdf } from '@/api/export';
+import { useSubjectStore } from '@/stores/subjectStore';
+import { NavBar, List, Button, Checkbox, Toast, SpinLoading, Picker } from 'antd-mobile';
+
+const optionLabels: Record<string, string> = {
+  originalImage: '原题图片',
+  originalOcr: 'OCR 文本',
+  referenceImage: '参考答案图',
+  reason: '错题原因',
+  tags: '标签',
+  reviewCount: '复习次数',
+  lastReviewAt: '最后复盘时间',
+  categoryPath: '章节路径',
+};
 
 export default function ExportPage() {
   const navigate = useNavigate();
+  const { currentSubjectId } = useSubjectStore();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [options, setOptions] = useState({
@@ -17,18 +31,31 @@ export default function ExportPage() {
     lastReviewAt: true,
     categoryPath: true,
   });
-  const [sort, setSort] = useState({ field: 'created_at', order: 'desc' as 'asc' | 'desc' });
+  const [sortField, setSortField] = useState('created_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [paperSize, setPaperSize] = useState('a4');
   const [loading, setLoading] = useState(false);
   const [resultUrl, setResultUrl] = useState('');
+  const [listLoading, setListLoading] = useState(false);
+  const [sortPickerVisible, setSortPickerVisible] = useState(false);
+  const [orderPickerVisible, setOrderPickerVisible] = useState(false);
+  const [paperPickerVisible, setPaperPickerVisible] = useState(false);
 
   useEffect(() => {
     loadQuestions();
-  }, []);
+  }, [currentSubjectId]);
 
   const loadQuestions = async () => {
-    const res = await getQuestions({ pageSize: 500 });
-    setQuestions(res.data.list);
+    setListLoading(true);
+    try {
+      const res = await getQuestions({
+        subject_id: currentSubjectId || undefined,
+        pageSize: 500,
+      });
+      setQuestions(res.data.list);
+    } finally {
+      setListLoading(false);
+    }
   };
 
   const toggleSelect = (id: number) => {
@@ -37,9 +64,17 @@ export default function ExportPage() {
     );
   };
 
+  const toggleAll = () => {
+    if (selectedIds.length === questions.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(questions.map((q) => q.id));
+    }
+  };
+
   const handleExport = async () => {
     if (selectedIds.length === 0) {
-      alert('请至少选择一道题');
+      Toast.show({ content: '请至少选择一道题', icon: 'fail' });
       return;
     }
     setLoading(true);
@@ -52,126 +87,158 @@ export default function ExportPage() {
       const res = await exportPdf({
         question_ids: selectedIds,
         options,
-        sort,
+        sort: { field: sortField, order: sortOrder },
         paperSize: paperMap[paperSize] || { name: 'A4' },
       });
       setResultUrl(res.data.url);
+      Toast.show({ content: '导出成功', icon: 'success' });
     } catch (err: any) {
-      alert(err.message);
+      Toast.show({ content: err.message || '导出失败', icon: 'fail' });
     } finally {
       setLoading(false);
     }
   };
 
-  const optionLabels: Record<string, string> = {
-    originalImage: '原题图片',
-    originalOcr: 'OCR 文本',
-    referenceImage: '参考答案图',
-    reason: '错题原因',
-    tags: '标签',
-    reviewCount: '复习次数',
-    lastReviewAt: '最后复盘时间',
-    categoryPath: '章节路径',
-  };
+  const sortFieldOptions = [
+    { label: '创建时间', value: 'created_at' },
+    { label: '复习次数', value: 'review_count' },
+    { label: '最后复盘', value: 'last_review_at' },
+  ];
+
+  const sortOrderOptions = [
+    { label: '降序', value: 'desc' },
+    { label: '升序', value: 'asc' },
+  ];
+
+  const paperSizeOptions = [
+    { label: 'A4', value: 'a4' },
+    { label: 'A5', value: 'a5' },
+    { label: 'Letter', value: 'letter' },
+  ];
+
+  const sortFieldLabel = sortFieldOptions.find((o) => o.value === sortField)?.label || '创建时间';
+  const sortOrderLabel = sortOrderOptions.find((o) => o.value === sortOrder)?.label || '降序';
+  const paperSizeLabel = paperSizeOptions.find((o) => o.value === paperSize)?.label || 'A4';
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center border-b px-4 py-3">
-        <button onClick={() => navigate(-1)} className="text-gray-500">
-          ←
-        </button>
-        <h1 className="mx-auto text-lg font-bold">导出 PDF</h1>
-      </header>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <NavBar onBack={() => navigate(-1)}>导出 PDF</NavBar>
 
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="mb-4">
-          <div className="mb-2 text-sm font-medium">选择题目 ({selectedIds.length})</div>
-          <div className="max-h-40 overflow-y-auto rounded-lg border bg-white">
-            {questions.map((q) => (
-              <label key={q.id} className="flex items-center gap-2 border-b px-3 py-2 text-sm last:border-b-0">
-                <input
-                  type="checkbox"
+      <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
+        <List header={`选择题目 (${selectedIds.length}/${questions.length})`}>
+          <List.Item
+            prefix={<Checkbox checked={selectedIds.length === questions.length && questions.length > 0} onChange={toggleAll} />}
+            onClick={toggleAll}
+          >
+            全选
+          </List.Item>
+          {questions.map((q) => (
+            <List.Item
+              key={q.id}
+              prefix={
+                <Checkbox
                   checked={selectedIds.includes(q.id)}
                   onChange={() => toggleSelect(q.id)}
                 />
-                <span className="flex-1 truncate">题目 #{q.id}</span>
-                <span className="text-xs text-gray-400">{q.category_name}</span>
-              </label>
-            ))}
-          </div>
-        </div>
+              }
+              onClick={() => toggleSelect(q.id)}
+              extra={<span style={{ fontSize: 12, color: '#999' }}>{q.category_name}</span>}
+            >
+              <span style={{ fontSize: 14 }}>题目 #{q.id}</span>
+            </List.Item>
+          ))}
+        </List>
 
-        <div className="mb-4">
-          <div className="mb-2 text-sm font-medium">包含内容</div>
-          <div className="grid grid-cols-2 gap-2">
-            {Object.entries(optionLabels).map(([key, label]) => (
-              <label key={key} className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
+        {listLoading && (
+          <div style={{ textAlign: 'center', padding: 16 }}>
+            <SpinLoading color="primary" />
+          </div>
+        )}
+
+        <List header="包含内容" style={{ marginTop: 12 }}>
+          {Object.entries(optionLabels).map(([key, label]) => (
+            <List.Item
+              key={key}
+              prefix={
+                <Checkbox
                   checked={(options as any)[key]}
-                  onChange={(e) => setOptions((prev) => ({ ...prev, [key]: e.target.checked }))}
+                  onChange={(checked) => setOptions((prev) => ({ ...prev, [key]: checked }))}
                 />
-                {label}
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div className="mb-4">
-          <div className="mb-2 text-sm font-medium">排序</div>
-          <div className="flex gap-2">
-            <select
-              value={sort.field}
-              onChange={(e) => setSort((s) => ({ ...s, field: e.target.value }))}
-              className="rounded-lg border px-2 py-1 text-sm"
+              }
+              onClick={() => setOptions((prev) => ({ ...prev, [key]: !((prev as any)[key]) }))}
             >
-              <option value="created_at">创建时间</option>
-              <option value="review_count">复习次数</option>
-              <option value="last_review_at">最后复盘</option>
-            </select>
-            <select
-              value={sort.order}
-              onChange={(e) => setSort((s) => ({ ...s, order: e.target.value as 'asc' | 'desc' }))}
-              className="rounded-lg border px-2 py-1 text-sm"
-            >
-              <option value="desc">降序</option>
-              <option value="asc">升序</option>
-            </select>
-          </div>
-        </div>
+              {label}
+            </List.Item>
+          ))}
+        </List>
 
-        <div className="mb-4">
-          <div className="mb-2 text-sm font-medium">纸张</div>
-          <select
-            value={paperSize}
-            onChange={(e) => setPaperSize(e.target.value)}
-            className="rounded-lg border px-2 py-1 text-sm"
+        <List header="排序" style={{ marginTop: 12 }}>
+          <List.Item
+            extra={sortFieldLabel}
+            onClick={() => setSortPickerVisible(true)}
+            arrow
           >
-            <option value="a4">A4</option>
-            <option value="a5">A5</option>
-            <option value="letter">Letter</option>
-          </select>
-        </div>
+            排序字段
+          </List.Item>
+          <List.Item
+            extra={sortOrderLabel}
+            onClick={() => setOrderPickerVisible(true)}
+            arrow
+          >
+            排序方向
+          </List.Item>
+        </List>
+
+        <List header="纸张" style={{ marginTop: 12 }}>
+          <List.Item
+            extra={paperSizeLabel}
+            onClick={() => setPaperPickerVisible(true)}
+            arrow
+          >
+            纸张尺寸
+          </List.Item>
+        </List>
 
         {resultUrl && (
-          <div className="mb-4 rounded-lg bg-green-50 p-3 text-sm">
-            <div className="font-medium text-green-800">导出成功</div>
-            <a href={resultUrl} target="_blank" rel="noreferrer" className="break-all text-primary underline">
+          <div style={{ marginTop: 12, padding: 12, background: '#f6ffed', borderRadius: 8, border: '1px solid #b7eb8f' }}>
+            <div style={{ fontWeight: 500, color: '#389e0d', marginBottom: 4 }}>导出成功</div>
+            <a href={resultUrl} target="_blank" rel="noreferrer" style={{ color: '#1677ff', fontSize: 12, wordBreak: 'break-all' }}>
               {resultUrl}
             </a>
           </div>
         )}
       </div>
 
-      <div className="border-t p-4">
-        <button
-          onClick={handleExport}
-          disabled={loading}
-          className="w-full rounded-lg bg-primary py-3 font-medium text-white disabled:opacity-60"
-        >
+      <div style={{ padding: 12, borderTop: '1px solid #eee' }}>
+        <Button block color="primary" size="large" loading={loading} onClick={handleExport}>
           {loading ? '生成中...' : '导出 PDF'}
-        </button>
+        </Button>
       </div>
+
+      <Picker
+        columns={[sortFieldOptions]}
+        visible={sortPickerVisible}
+        onClose={() => setSortPickerVisible(false)}
+        value={[sortField]}
+        onConfirm={(v) => { setSortField(v[0] as string); setSortPickerVisible(false); }}
+        title="排序字段"
+      />
+      <Picker
+        columns={[sortOrderOptions]}
+        visible={orderPickerVisible}
+        onClose={() => setOrderPickerVisible(false)}
+        value={[sortOrder]}
+        onConfirm={(v) => { setSortOrder(v[0] as 'asc' | 'desc'); setOrderPickerVisible(false); }}
+        title="排序方向"
+      />
+      <Picker
+        columns={[paperSizeOptions]}
+        visible={paperPickerVisible}
+        onClose={() => setPaperPickerVisible(false)}
+        value={[paperSize]}
+        onConfirm={(v) => { setPaperSize(v[0] as string); setPaperPickerVisible(false); }}
+        title="纸张尺寸"
+      />
     </div>
   );
 }

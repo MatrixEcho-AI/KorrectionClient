@@ -98,7 +98,9 @@ export default function Subjects() {
             style={{ flex: 1 }}
           />
           <Button color="primary" onClick={handleAdd}>
-            <AddOutline /> 创建
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <AddOutline /> 创建
+            </span>
           </Button>
         </Space>
       </div>

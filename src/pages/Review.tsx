@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getQuestion, submitReview } from '@/api/questions';
+import { NavBar, Button, SpinLoading, Image, Tag, Toast } from 'antd-mobile';
 
 const typeLabel: Record<string, string> = {
   original_question: '原题',
@@ -27,6 +28,7 @@ export default function Review() {
     setLoading(true);
     try {
       await submitReview(Number(id), action);
+      Toast.show({ content: action === 'understood' ? '已标记为懂了' : '已标记为没懂', icon: 'success' });
       if (action === 'understood') {
         navigate(`/questions/${id}/redo`);
       } else {
@@ -39,28 +41,23 @@ export default function Review() {
 
   if (!detail) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <SpinLoading color="primary" />
       </div>
     );
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center border-b px-4 py-3">
-        <button onClick={() => navigate(-1)} className="text-gray-500">
-          ←
-        </button>
-        <h1 className="mx-auto text-lg font-bold">复盘</h1>
-      </header>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <NavBar onBack={() => navigate(-1)}>复盘</NavBar>
 
-      <div className="flex-1 overflow-y-auto p-4">
+      <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
         {detail.images?.map((img: any) => (
-          <div key={img.id} className="mb-4 rounded-lg border bg-white p-3">
-            <div className="mb-1 text-xs font-medium text-gray-500">{typeLabel[img.image_type]}</div>
-            <img src={img.image_url} alt="" className="h-48 w-full rounded-md object-contain" />
+          <div key={img.id} style={{ marginBottom: 16, borderRadius: 8, border: '1px solid #eee', padding: 12, background: '#fff' }}>
+            <div style={{ fontSize: 12, fontWeight: 500, color: '#666', marginBottom: 8 }}>{typeLabel[img.image_type]}</div>
+            <Image src={img.image_url} style={{ width: '100%', maxHeight: 192, borderRadius: 4 }} fit="contain" />
             {img.ocr_text && (
-              <div className="mt-2 rounded bg-gray-50 p-2 text-xs text-gray-600 whitespace-pre-wrap">
+              <div style={{ marginTop: 8, padding: 8, background: '#f5f5f5', borderRadius: 4, fontSize: 12, color: '#666', whiteSpace: 'pre-wrap' }}>
                 {img.ocr_text}
               </div>
             )}
@@ -68,45 +65,33 @@ export default function Review() {
         ))}
 
         {detail.reason_text && (
-          <div className="mb-4 rounded-lg border bg-white p-3">
-            <div className="text-xs font-medium text-gray-500">错题原因</div>
-            <div className="mt-1 text-sm text-gray-800">{detail.reason_text}</div>
+          <div style={{ marginBottom: 16, borderRadius: 8, border: '1px solid #eee', padding: 12, background: '#fff' }}>
+            <div style={{ fontSize: 12, fontWeight: 500, color: '#666' }}>错题原因</div>
+            <div style={{ marginTop: 4, fontSize: 14, color: '#333' }}>{detail.reason_text}</div>
           </div>
         )}
 
         {detail.tags?.length > 0 && (
-          <div className="mb-4 flex flex-wrap gap-2">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
             {detail.tags.map((t: any) => (
-              <span key={t.id} className="rounded-full bg-blue-50 px-3 py-1 text-xs text-blue-700">
-                {t.name}
-              </span>
+              <Tag key={t.id} color="primary" fill="outline">{t.name}</Tag>
             ))}
           </div>
         )}
 
-        <div className="mb-4 text-xs text-gray-500">
+        <div style={{ fontSize: 12, color: '#999' }}>
           <div>章节: {detail.category_name || '-'}</div>
           <div>复习次数: {detail.review_count}</div>
         </div>
       </div>
 
-      <div className="border-t p-4">
-        <div className="flex gap-3">
-          <button
-            onClick={() => handleReview('not_understood')}
-            disabled={loading}
-            className="flex-1 rounded-lg bg-danger py-3 font-medium text-white disabled:opacity-60"
-          >
-            我没懂
-          </button>
-          <button
-            onClick={() => handleReview('understood')}
-            disabled={loading}
-            className="flex-1 rounded-lg bg-success py-3 font-medium text-white disabled:opacity-60"
-          >
-            我懂了
-          </button>
-        </div>
+      <div style={{ padding: 12, borderTop: '1px solid #eee', display: 'flex', gap: 12 }}>
+        <Button block color="danger" size="large" loading={loading} onClick={() => handleReview('not_understood')}>
+          我没懂
+        </Button>
+        <Button block color="primary" size="large" loading={loading} onClick={() => handleReview('understood')}>
+          我懂了
+        </Button>
       </div>
     </div>
   );

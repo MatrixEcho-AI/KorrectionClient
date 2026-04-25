@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getQuestions, deleteQuestion, type Question } from '@/api/questions';
-import { useAuthStore } from '@/stores/authStore';
 import { useCategoryStore } from '@/stores/categoryStore';
 import { useSubjectStore } from '@/stores/subjectStore';
 import {
@@ -38,7 +37,6 @@ const statusColors: Record<string, string> = {
 
 export default function Home() {
   const navigate = useNavigate();
-  const { logout } = useAuthStore();
   const { fetch: fetchCategories } = useCategoryStore();
   const { subjects, currentSubjectId, fetch: fetchSubjects, setCurrent, init: initSubject } = useSubjectStore();
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -127,9 +125,9 @@ export default function Home() {
           <div style={{ display: 'flex', gap: 12, fontSize: 14 }}>
             <span style={{ color: '#1677ff' }} onClick={() => navigate('/subjects')}>科目</span>
             <span style={{ color: '#1677ff' }} onClick={() => navigate('/export')}>导出</span>
-            <span style={{ color: '#1677ff' }} onClick={() => navigate('/categories')}>分类</span>
+            <span style={{ color: '#1677ff' }} onClick={() => navigate('/categories')}>章节</span>
             <span style={{ color: '#666' }} onClick={() => navigate('/trash')}>回收站</span>
-            <span style={{ color: '#666' }} onClick={logout}>退出</span>
+            <span style={{ color: '#666' }} onClick={() => navigate('/settings')}>设置</span>
           </div>
         }
       />
@@ -142,9 +140,9 @@ export default function Home() {
 
       <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
         {!currentSubject && !loading && (
-          <div style={{ textAlign: 'center', paddingTop: 40 }}>
+          <div style={{ textAlign: 'center', paddingTop: 80 }}>
             <Empty description="请先选择或添加科目" />
-            <Button color="primary" size="small" onClick={() => navigate('/subjects')} style={{ marginTop: 12 }}>
+            <Button color="primary" size="small" onClick={() => navigate('/subjects')} style={{ marginTop: 16 }}>
               去添加科目
             </Button>
           </div>
@@ -199,7 +197,9 @@ export default function Home() {
 
       <div style={{ padding: 12, borderTop: '1px solid #eee' }}>
         <Button block color="primary" size="large" onClick={() => navigate('/questions/new')}>
-          <AddOutline /> 拍照录入
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <AddOutline /> 拍照录入
+          </span>
         </Button>
       </div>
 

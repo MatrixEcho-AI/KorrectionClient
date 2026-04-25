@@ -1,20 +1,24 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getQuestions, restoreQuestion, permanentDeleteQuestion, type Question } from '@/api/questions';
+import { useSubjectStore } from '@/stores/subjectStore';
+import { NavBar, List, Button, Dialog, Toast, Empty, SpinLoading } from 'antd-mobile';
+import { UndoOutline, DeleteOutline } from 'antd-mobile-icons';
 
 export default function Trash() {
   const navigate = useNavigate();
+  const { currentSubjectId } = useSubjectStore();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [currentSubjectId]);
 
   const load = async () => {
     setLoading(true);
     try {
-      const res = await getQuestions({ status: 'deleted', pageSize: 500 });
+      const res = await getQuestions({ status: 'deleted', subject_id: currentSubjectId || undefined, pageSize: 500 });
       setQuestions(res.data.list);
     } finally {
       setLoading(false);
@@ -23,51 +27,57 @@ export default function Trash() {
 
   const handleRestore = async (id: number) => {
     await restoreQuestion(id);
+    Toast.show({ content: '已恢复', icon: 'success' });
     await load();
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('彻底删除后无法恢复，确定吗？')) return;
+    const result = await Dialog.confirm({ content: '彻底删除后无法恢复，确定吗？' });
+    if (!result) return;
     await permanentDeleteQuestion(id);
+    Toast.show({ content: '已删除', icon: 'success' });
     await load();
   };
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center border-b px-4 py-3">
-        <button onClick={() => navigate(-1)} className="text-gray-500">
-          ←
-        </button>
-        <h1 className="mx-auto text-lg font-bold">回收站</h1>
-      </header>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <NavBar onBack={() => navigate(-1)}>回收站</NavBar>
 
-      <div className="flex-1 overflow-y-auto p-4">
+      <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
         {questions.length === 0 && !loading && (
-          <div className="mt-20 text-center text-gray-400">回收站为空</div>
+          <Empty description="回收站为空" />
         )}
 
-        <div className="space-y-3">
+        <List>
           {questions.map((q) => (
-            <div key={q.id} className="rounded-lg border bg-white p-4 shadow-sm">
-              <div className="mb-2 text-sm text-gray-500">题目 #{q.id}</div>
-              <div className="text-xs text-gray-400">{new Date(q.created_at).toLocaleDateString()}</div>
-              <div className="mt-3 flex gap-2">
-                <button
-                  onClick={() => handleRestore(q.id)}
-                  className="flex-1 rounded-lg bg-primary py-2 text-sm text-white"
-                >
-                  恢复
-                </button>
-                <button
-                  onClick={() => handleDelete(q.id)}
-                  className="flex-1 rounded-lg bg-danger py-2 text-sm text-white"
-                >
-                  彻底删除
-                </button>
-              </div>
-            </div>
+            <List.Item
+              key={q.id}
+              description={
+                <span style={{ fontSize: 12, color: '#999' }}>
+                  {new Date(q.created_at).toLocaleDateString()}
+                </span>
+              }
+              extra={
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Button size="mini" color="primary" fill="outline" onClick={() => handleRestore(q.id)}>
+                    <UndoOutline />
+                  </Button>
+                  <Button size="mini" color="danger" fill="outline" onClick={() => handleDelete(q.id)}>
+                    <DeleteOutline />
+                  </Button>
+                </div>
+              }
+            >
+              <span style={{ fontSize: 14 }}>题目 #{q.id}</span>
+            </List.Item>
           ))}
-        </div>
+        </List>
+
+        {loading && (
+          <div style={{ textAlign: 'center', padding: 16 }}>
+            <SpinLoading color="primary" />
+          </div>
+        )}
       </div>
     </div>
   );

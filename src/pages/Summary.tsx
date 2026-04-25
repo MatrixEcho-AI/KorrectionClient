@@ -3,32 +3,41 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getQuestion, submitSummary, getRecommendations } from '@/api/questions';
 import { getTags, createTag, type Tag } from '@/api/tags';
 import { useCategoryStore } from '@/stores/categoryStore';
+import { useSubjectStore } from '@/stores/subjectStore';
+import { NavBar, Button, TextArea, Tag as AmTag, Toast, Picker, Input } from 'antd-mobile';
 
 export default function Summary() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { categories } = useCategoryStore();
+  const { categories, fetch: fetchCategories } = useCategoryStore();
+  const { currentSubjectId } = useSubjectStore();
   const [reason, setReason] = useState('');
-  const [categoryId, setCategoryId] = useState<number | ''>('');
+  const [categoryId, setCategoryId] = useState<number[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const [newTagName, setNewTagName] = useState('');
-  const [subjectId, setSubjectId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [recommendLoading, setRecommendLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [categoryPickerVisible, setCategoryPickerVisible] = useState(false);
 
   useEffect(() => {
+    if (currentSubjectId) {
+      fetchCategories(currentSubjectId);
+    }
     load();
-  }, [id]);
+  }, [id, currentSubjectId]);
 
   const load = async () => {
     try {
       const res = await getQuestion(Number(id));
       setReason(res.data.reason_text || '');
-      setCategoryId(res.data.category_id);
-
-      // 找到科目 ID（当前节点的根）
+      if (res.data.category_id) {
+        setCategoryId([res.data.category_id]);
+      }
+      if (res.data.tags) {
+        setSelectedTagIds(res.data.tags.map((t: any) => t.id));
+      }
+      // 找到科目并加载标签
       let currId = res.data.category_id;
       let curr = categories.find((c) => c.id === currId);
       while (curr && curr.parent_id !== 0) {
@@ -36,18 +45,12 @@ export default function Summary() {
         curr = categories.find((c) => c.id === currId);
       }
       const sid = curr?.id || res.data.category_id;
-      setSubjectId(sid);
-
       if (sid) {
         const tRes = await getTags(sid);
         setTags(tRes.data);
       }
-
-      if (res.data.tags) {
-        setSelectedTagIds(res.data.tags.map((t: any) => t.id));
-      }
     } catch (err: any) {
-      setError(err.message);
+      Toast.show({ content: err.message, icon: 'fail' });
     }
   };
 
@@ -58,30 +61,30 @@ export default function Summary() {
   };
 
   const handleCreateTag = async () => {
-    if (!newTagName.trim() || !subjectId) return;
+    if (!newTagName.trim() || !currentSubjectId) return;
     try {
-      const res = await createTag({ subject_id: subjectId, name: newTagName.trim() });
-      const newTag: Tag = { id: res.data.id, user_id: 0, subject_id: subjectId, name: newTagName.trim() };
+      const res = await createTag({ subject_id: currentSubjectId, name: newTagName.trim() });
+      const newTag: Tag = { id: res.data.id, user_id: 0, subject_id: currentSubjectId, name: newTagName.trim() };
       setTags((prev) => [...prev, newTag]);
       setSelectedTagIds((prev) => [...prev, newTag.id]);
       setNewTagName('');
     } catch (err: any) {
-      setError(err.message);
+      Toast.show({ content: err.message, icon: 'fail' });
     }
   };
 
   const handleRecommend = async () => {
     setRecommendLoading(true);
-    setError('');
     try {
       const res = await getRecommendations(Number(id));
       const { category_id, tag_ids } = res.data;
-      if (category_id) setCategoryId(category_id);
+      if (category_id) setCategoryId([category_id]);
       if (tag_ids.length) {
         setSelectedTagIds((prev) => Array.from(new Set([...prev, ...tag_ids])));
       }
+      Toast.show({ content: 'AI 推荐已应用', icon: 'success' });
     } catch (err: any) {
-      setError('AI 推荐失败: ' + err.message);
+      Toast.show({ content: 'AI 推荐失败: ' + err.message, icon: 'fail' });
     } finally {
       setRecommendLoading(false);
     }
@@ -89,117 +92,102 @@ export default function Summary() {
 
   const handleSubmit = async () => {
     if (!reason.trim()) {
-      setError('请填写错题原因');
+      Toast.show({ content: '请填写错题原因', icon: 'fail' });
       return;
     }
     if (selectedTagIds.length === 0) {
-      setError('请至少选择一个标签');
+      Toast.show({ content: '请至少选择一个标签', icon: 'fail' });
       return;
     }
     setLoading(true);
     try {
       await submitSummary(Number(id), {
         reason_text: reason.trim(),
-        category_id: categoryId ? Number(categoryId) : undefined,
+        category_id: categoryId[0] || undefined,
         tag_ids: selectedTagIds,
       });
+      Toast.show({ content: '保存成功', icon: 'success' });
       navigate(`/questions/${id}`);
     } catch (err: any) {
-      setError(err.message);
+      Toast.show({ content: err.message, icon: 'fail' });
     } finally {
       setLoading(false);
     }
   };
 
+  const categoryColumns = [categories.map((c) => ({ label: '　'.repeat(c.level - 1) + c.name, value: c.id }))];
+  const selectedCategoryName = categories.find((c) => c.id === categoryId[0])?.name || '请选择章节';
+
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center border-b px-4 py-3">
-        <button onClick={() => navigate(-1)} className="text-gray-500">
-          ←
-        </button>
-        <h1 className="mx-auto text-lg font-bold">总结错题</h1>
-        <button
-          onClick={handleRecommend}
-          disabled={recommendLoading}
-          className="text-xs text-primary disabled:text-gray-400"
-        >
-          {recommendLoading ? '推荐中...' : 'AI推荐'}
-        </button>
-      </header>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <NavBar
+        onBack={() => navigate(-1)}
+        right={
+          <Button size="mini" color="primary" fill="outline" loading={recommendLoading} onClick={handleRecommend}>
+            AI推荐
+          </Button>
+        }
+      >
+        总结错题
+      </NavBar>
 
-      <div className="flex-1 overflow-y-auto p-4">
-        {error && <p className="mb-3 text-sm text-danger">{error}</p>}
-
-        <div className="mb-4">
-          <label className="mb-1 block text-sm font-medium">错题原因</label>
-          <textarea
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            rows={4}
+      <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 8 }}>错题原因</div>
+          <TextArea
             placeholder="为什么做错了？思路问题？知识点不熟？"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary"
+            rows={4}
+            value={reason}
+            onChange={(v) => setReason(v)}
           />
         </div>
 
-        <div className="mb-4">
-          <label className="mb-1 block text-sm font-medium">归属章节</label>
-          <select
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 8 }}>归属章节</div>
+          <Button block fill="outline" onClick={() => setCategoryPickerVisible(true)}>
+            {selectedCategoryName}
+          </Button>
+          <Picker
+            columns={categoryColumns}
+            visible={categoryPickerVisible}
+            onClose={() => setCategoryPickerVisible(false)}
             value={categoryId}
-            onChange={(e) => setCategoryId(Number(e.target.value))}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          >
-            <option value="">请选择</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {'　'.repeat(c.level - 1) + c.name}
-              </option>
-            ))}
-          </select>
+            onConfirm={(v) => { setCategoryId(v as number[]); setCategoryPickerVisible(false); }}
+            title="选择章节"
+          />
         </div>
 
-        <div className="mb-4">
-          <label className="mb-1 block text-sm font-medium">标签</label>
-          <div className="mb-2 flex flex-wrap gap-2">
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 8 }}>标签</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
             {tags.map((t) => (
-              <button
+              <AmTag
                 key={t.id}
+                color={selectedTagIds.includes(t.id) ? 'primary' : 'default'}
                 onClick={() => toggleTag(t.id)}
-                className={`rounded-full px-3 py-1 text-xs ${
-                  selectedTagIds.includes(t.id)
-                    ? 'bg-primary text-white'
-                    : 'bg-gray-100 text-gray-600'
-                }`}
               >
                 {t.name}
-              </button>
+              </AmTag>
             ))}
           </div>
-          <div className="flex gap-2">
-            <input
-              value={newTagName}
-              onChange={(e) => setNewTagName(e.target.value)}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Input
               placeholder="新建标签"
-              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              value={newTagName}
+              onChange={(v) => setNewTagName(v)}
+              style={{ flex: 1 }}
             />
-            <button
-              onClick={handleCreateTag}
-              disabled={!newTagName.trim()}
-              className="rounded-lg bg-gray-100 px-3 py-2 text-sm text-primary disabled:text-gray-400"
-            >
+            <Button color="primary" disabled={!newTagName.trim()} onClick={handleCreateTag}>
               添加
-            </button>
+            </Button>
           </div>
         </div>
       </div>
 
-      <div className="border-t p-4">
-        <button
-          onClick={handleSubmit}
-          disabled={loading}
-          className="w-full rounded-lg bg-primary py-3 font-medium text-white disabled:opacity-60"
-        >
+      <div style={{ padding: 12, borderTop: '1px solid #eee' }}>
+        <Button block color="primary" size="large" loading={loading} onClick={handleSubmit}>
           {loading ? '保存中...' : '完成总结'}
-        </button>
+        </Button>
       </div>
     </div>
   );
