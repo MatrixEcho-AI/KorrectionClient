@@ -4,7 +4,7 @@ import { getCategories, type Category } from '@/api/categories';
 interface CategoryState {
   categories: Category[];
   loading: boolean;
-  fetch: () => Promise<void>;
+  fetch: (subject_id?: number) => Promise<void>;
   getTree: () => Category[];
   getPath: (id: number) => string;
 }
@@ -30,10 +30,10 @@ function buildTree(list: Category[]): Category[] {
 export const useCategoryStore = create<CategoryState>((set, get) => ({
   categories: [],
   loading: false,
-  fetch: async () => {
+  fetch: async (subject_id?: number) => {
     set({ loading: true });
     try {
-      const res = await getCategories();
+      const res = await getCategories(subject_id);
       set({ categories: res.data });
     } finally {
       set({ loading: false });

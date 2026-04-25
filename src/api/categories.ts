@@ -9,10 +9,10 @@ export interface Category {
   sort_order: number;
 }
 
-export const getCategories = () =>
-  client.get('/api/categories') as Promise<{ code: number; data: Category[] }>;
+export const getCategories = (subject_id?: number) =>
+  client.get('/api/categories', { params: subject_id ? { subject_id } : undefined }) as Promise<{ code: number; data: Category[] }>;
 
-export const createCategory = (data: { parent_id?: number; name: string }) =>
+export const createCategory = (data: { parent_id?: number; subject_id?: number; name: string }) =>
   client.post('/api/categories', data) as Promise<{ code: number; data: { id: number } }>;
 
 export const updateCategory = (id: number, data: { name: string }) =>

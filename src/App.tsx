@@ -9,6 +9,7 @@ import Summary from '@/pages/Summary';
 import Review from '@/pages/Review';
 import Redo from '@/pages/Redo';
 import Categories from '@/pages/Categories';
+import Subjects from '@/pages/Subjects';
 import ExportPage from '@/pages/ExportPage';
 import Trash from '@/pages/Trash';
 
@@ -38,6 +39,7 @@ function App() {
         <Route path="/questions/:id/review" element={token ? <Review /> : <Navigate to="/login" />} />
         <Route path="/questions/:id/redo" element={token ? <Redo /> : <Navigate to="/login" />} />
         <Route path="/categories" element={token ? <Categories /> : <Navigate to="/login" />} />
+        <Route path="/subjects" element={token ? <Subjects /> : <Navigate to="/login" />} />
         <Route path="/export" element={token ? <ExportPage /> : <Navigate to="/login" />} />
         <Route path="/trash" element={token ? <Trash /> : <Navigate to="/login" />} />
       </Routes>

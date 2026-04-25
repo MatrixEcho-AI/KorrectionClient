@@ -2,13 +2,13 @@ import { useState, useRef, useEffect } from 'react';
 import { Preferences } from '@capacitor/preferences';
 import { sendCode, login } from '@/api/auth';
 import { useAuthStore } from '@/stores/authStore';
+import { Form, Input, Button, Space, Toast } from 'antd-mobile';
 
 export default function Login() {
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
   const [countdown, setCountdown] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const { setToken, setUser } = useAuthStore();
 
@@ -32,26 +32,25 @@ export default function Login() {
   };
 
   const handleSendCode = async () => {
-    setError('');
     if (!/^1[3-9]\d{9}$/.test(phone)) {
-      setError('请输入有效的手机号');
+      Toast.show({ content: '请输入有效的手机号', icon: 'fail' });
       return;
     }
     setLoading(true);
     try {
       const res = await sendCode(phone);
       startCountdown(res.data.expiresIn);
+      Toast.show({ content: '验证码已发送', icon: 'success' });
     } catch (err: any) {
-      setError(err.message || '发送失败');
+      Toast.show({ content: err.message || '发送失败', icon: 'fail' });
     } finally {
       setLoading(false);
     }
   };
 
   const handleLogin = async () => {
-    setError('');
     if (!/^1[3-9]\d{9}$/.test(phone) || !/^\d{6}$/.test(code)) {
-      setError('请正确填写手机号和验证码');
+      Toast.show({ content: '请正确填写手机号和验证码', icon: 'fail' });
       return;
     }
     setLoading(true);
@@ -61,55 +60,61 @@ export default function Login() {
       setToken(res.data.token);
       setUser(res.data.user);
     } catch (err: any) {
-      setError(err.message || '登录失败');
+      Toast.show({ content: err.message || '登录失败', icon: 'fail' });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex h-full flex-col items-center justify-center px-6">
-      <h1 className="mb-2 text-3xl font-bold text-primary">Korrection</h1>
-      <p className="mb-8 text-secondary">智能错题本</p>
+    <div style={{ padding: 48, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+      <Space direction="vertical" block style={{ textAlign: 'center', marginBottom: 32 }}>
+        <h1 style={{ fontSize: 32, fontWeight: 800, color: '#1677ff', margin: 0 }}>Korrection</h1>
+        <p style={{ color: '#999', margin: 0 }}>智能错题本</p>
+      </Space>
 
-      <div className="w-full space-y-4">
-        <input
-          type="tel"
-          placeholder="手机号"
-          maxLength={11}
-          value={phone}
-          onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-          className="w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-        />
-
-        <div className="flex gap-2">
-          <input
+      <Form layout="vertical">
+        <Form.Item label="手机号">
+          <Input
+            placeholder="请输入手机号"
+            maxLength={11}
+            value={phone}
+            onChange={(v) => setPhone(v.replace(/\D/g, ''))}
             type="number"
-            placeholder="验证码"
-            maxLength={6}
-            value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-            className="flex-1 rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-primary focus:ring-1 focus:ring-primary"
           />
-          <button
+        </Form.Item>
+
+        <Form.Item label="验证码" extra={
+          <Button
+            size="small"
+            color="primary"
+            fill="outline"
             onClick={handleSendCode}
             disabled={countdown > 0 || loading}
-            className="whitespace-nowrap rounded-lg bg-gray-100 px-4 py-3 text-sm font-medium text-primary disabled:text-gray-400"
+            style={{ marginTop: 4 }}
           >
             {countdown > 0 ? `${countdown}s` : '获取验证码'}
-          </button>
-        </div>
+          </Button>
+        }>
+          <Input
+            placeholder="请输入验证码"
+            maxLength={6}
+            value={code}
+            onChange={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))}
+            type="number"
+          />
+        </Form.Item>
 
-        {error && <p className="text-sm text-danger">{error}</p>}
-
-        <button
+        <Button
+          block
+          color="primary"
+          size="large"
+          loading={loading}
           onClick={handleLogin}
-          disabled={loading}
-          className="w-full rounded-lg bg-primary py-3 font-medium text-white disabled:opacity-60"
         >
-          {loading ? '登录中...' : '登录 / 注册'}
-        </button>
-      </div>
+          登录 / 注册
+        </Button>
+      </Form>
     </div>
   );
 }

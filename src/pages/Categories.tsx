@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getCategories, createCategory, updateCategory, deleteCategory, type Category } from '@/api/categories';
+import { useSubjectStore } from '@/stores/subjectStore';
+import { NavBar, List, Button, Input, Dialog, Toast, SwipeAction, Space, Modal, Empty } from 'antd-mobile';
+import { AddOutline, EditSOutline, DeleteOutline, DownOutline, RightOutline } from 'antd-mobile-icons';
 
 function buildTree(list: Category[]): (Category & { children?: Category[] })[] {
   const map = new Map<number, Category & { children?: Category[] }>();
@@ -35,28 +38,33 @@ function TreeNode({
   const hasChildren = node.children && node.children.length > 0;
 
   return (
-    <div className="ml-2">
-      <div className="flex items-center gap-2 py-2">
-        {hasChildren ? (
-          <button onClick={() => setExpanded(!expanded)} className="text-xs text-gray-400">
-            {expanded ? '▼' : '▶'}
-          </button>
-        ) : (
-          <span className="w-3" />
-        )}
-        <span className="flex-1 text-sm">{node.name}</span>
-        <button onClick={() => onAdd(node.id)} className="text-xs text-primary">
-          +子
-        </button>
-        <button onClick={() => onEdit(node.id, node.name)} className="text-xs text-secondary">
-          编辑
-        </button>
-        <button onClick={() => onDelete(node.id)} className="text-xs text-danger">
-          删除
-        </button>
-      </div>
+    <div style={{ marginLeft: 16 }}>
+      <SwipeAction
+        rightActions={[
+          { key: 'edit', text: <EditSOutline />, color: 'primary', onClick: () => onEdit(node.id, node.name) },
+          { key: 'delete', text: <DeleteOutline />, color: 'danger', onClick: () => onDelete(node.id) },
+        ]}
+      >
+        <List.Item
+          prefix={
+            <Space>
+              {hasChildren && (
+                <span style={{ color: '#999', fontSize: 12 }} onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}>
+                  {expanded ? <DownOutline /> : <RightOutline />}
+                </span>
+              )}
+              <span style={{ fontSize: 14 }}>{node.name}</span>
+            </Space>
+          }
+          extra={
+            <Button size="mini" fill="outline" onClick={() => onAdd(node.id)}>
+              <AddOutline />
+            </Button>
+          }
+        />
+      </SwipeAction>
       {expanded && hasChildren && (
-        <div className="border-l pl-2">
+        <div>
           {node.children!.map((child) => (
             <TreeNode key={child.id} node={child} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} />
           ))}
@@ -68,21 +76,27 @@ function TreeNode({
 
 export default function Categories() {
   const navigate = useNavigate();
+  const { currentSubjectId } = useSubjectStore();
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editingName, setEditingName] = useState('');
-  const [addingParentId, setAddingParentId] = useState<number | null>(null);
   const [addingName, setAddingName] = useState('');
+  const [addingParentId, setAddingParentId] = useState<number | null>(null);
+  const [editVisible, setEditVisible] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editName, setEditName] = useState('');
 
   useEffect(() => {
     load();
-  }, []);
+  }, [currentSubjectId]);
 
   const load = async () => {
+    if (!currentSubjectId) {
+      setCategories([]);
+      return;
+    }
     setLoading(true);
     try {
-      const res = await getCategories();
+      const res = await getCategories(currentSubjectId);
       setCategories(res.data);
     } finally {
       setLoading(false);
@@ -92,97 +106,113 @@ export default function Categories() {
   const handleAdd = async () => {
     if (!addingName.trim()) return;
     try {
-      await createCategory({ parent_id: addingParentId || 0, name: addingName.trim() });
+      await createCategory({ parent_id: addingParentId || 0, subject_id: addingParentId ? undefined : currentSubjectId || undefined, name: addingName.trim() });
       setAddingName('');
       setAddingParentId(null);
       await load();
+      Toast.show({ content: '创建成功', icon: 'success' });
     } catch (err: any) {
-      alert(err.message);
+      Toast.show({ content: err.message, icon: 'fail' });
     }
   };
 
-  const handleEdit = async () => {
-    if (!editingName.trim() || editingId == null) return;
+  const openEdit = (id: number, name: string) => {
+    setEditId(id);
+    setEditName(name);
+    setEditVisible(true);
+  };
+
+  const handleEditSave = async () => {
+    if (!editName.trim() || editId === null) return;
     try {
-      await updateCategory(editingId, { name: editingName.trim() });
-      setEditingId(null);
-      setEditingName('');
+      await updateCategory(editId, { name: editName.trim() });
+      setEditVisible(false);
+      setEditId(null);
+      setEditName('');
       await load();
+      Toast.show({ content: '修改成功', icon: 'success' });
     } catch (err: any) {
-      alert(err.message);
+      Toast.show({ content: err.message, icon: 'fail' });
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('确定删除？')) return;
+    const result = await Dialog.confirm({ content: '确定删除？子节点和题目会受影响。' });
+    if (!result) return;
     try {
       await deleteCategory(id);
       await load();
+      Toast.show({ content: '删除成功', icon: 'success' });
     } catch (err: any) {
-      alert(err.message);
+      Toast.show({ content: err.message, icon: 'fail' });
     }
   };
 
   const tree = buildTree(categories);
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center border-b px-4 py-3">
-        <button onClick={() => navigate(-1)} className="text-gray-500">
-          ←
-        </button>
-        <h1 className="mx-auto text-lg font-bold">章节管理</h1>
-      </header>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <NavBar onBack={() => navigate(-1)}>章节管理</NavBar>
 
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="mb-4 flex gap-2">
-          <input
-            value={addingName}
-            onChange={(e) => setAddingName(e.target.value)}
+      <div style={{ padding: 12, borderBottom: '1px solid #eee' }}>
+        <Space block>
+          <Input
             placeholder="新建科目/章节"
-            className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            value={addingName}
+            onChange={(v) => setAddingName(v)}
+            style={{ flex: 1 }}
           />
-          <button onClick={handleAdd} className="rounded-lg bg-primary px-4 py-2 text-sm text-white">
-            创建
-          </button>
-        </div>
-
-        {editingId !== null && (
-          <div className="mb-4 flex gap-2 rounded-lg bg-yellow-50 p-3">
-            <input
-              value={editingName}
-              onChange={(e) => setEditingName(e.target.value)}
-              className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
-            />
-            <button onClick={handleEdit} className="text-sm text-primary">
-              保存
-            </button>
-            <button onClick={() => setEditingId(null)} className="text-sm text-gray-500">
-              取消
-            </button>
+          <Button color="primary" onClick={handleAdd}>
+            <AddOutline /> 创建
+          </Button>
+        </Space>
+        {addingParentId !== null && (
+          <div style={{ fontSize: 12, color: '#1677ff', marginTop: 4 }}>
+            将作为 ID:{addingParentId} 的子节点创建
+            <span style={{ color: '#999', marginLeft: 8 }} onClick={() => setAddingParentId(null)}>取消</span>
           </div>
         )}
+      </div>
 
-        {loading && <div className="text-center text-sm text-gray-400">加载中...</div>}
-
-        <div>
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        <List>
           {tree.map((node) => (
             <TreeNode
               key={node.id}
               node={node}
-              onAdd={(pid) => {
-                setAddingParentId(pid);
-                setAddingName('');
-              }}
-              onEdit={(id, name) => {
-                setEditingId(id);
-                setEditingName(name);
-              }}
+              onAdd={(pid) => { setAddingParentId(pid); setAddingName(''); }}
+              onEdit={openEdit}
               onDelete={handleDelete}
             />
           ))}
-        </div>
+        </List>
+        {!currentSubjectId && !loading && (
+          <div style={{ textAlign: 'center', paddingTop: 40 }}>
+            <Empty description="请先选择科目" />
+            <Button color="primary" size="small" onClick={() => navigate('/')} style={{ marginTop: 12 }}>
+              去选择科目
+            </Button>
+          </div>
+        )}
+        {currentSubjectId && categories.length === 0 && !loading && <Empty description="暂无章节" />}
       </div>
+
+      <Modal
+        visible={editVisible}
+        onClose={() => setEditVisible(false)}
+        title="重命名"
+        content={
+          <Input
+            placeholder="新名称"
+            value={editName}
+            onChange={(v) => setEditName(v)}
+          />
+        }
+        actions={[
+          { key: 'cancel', text: '取消', onClick: () => setEditVisible(false) },
+          { key: 'confirm', text: '保存', primary: true, onClick: handleEditSave },
+        ]}
+      />
     </div>
   );
 }

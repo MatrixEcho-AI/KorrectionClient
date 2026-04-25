@@ -26,6 +26,7 @@ export const getQuestions = (params?: {
   status?: string;
   category_id?: number;
   tag_id?: number;
+  subject_id?: number;
   page?: number;
   pageSize?: number;
 }) =>
@@ -37,8 +38,8 @@ export const getQuestions = (params?: {
 export const getQuestion = (id: number) =>
   client.get(`/api/questions/${id}`) as Promise<{ code: number; data: Question & { images: QuestionImage[]; tags: any[]; reviews: any[]; redo: any } }>;
 
-export const createQuestion = (category_id: number) =>
-  client.post('/api/questions', { category_id }) as Promise<{ code: number; data: { id: number } }>;
+export const createQuestion = (category_id: number, subject_id?: number) =>
+  client.post('/api/questions', { category_id, subject_id }) as Promise<{ code: number; data: { id: number } }>;
 
 export const updateQuestion = (id: number, data: Partial<Question>) =>
   client.put(`/api/questions/${id}`, data) as Promise<{ code: number; data: null }>;

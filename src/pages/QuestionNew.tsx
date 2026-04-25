@@ -1,21 +1,34 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { createQuestion, addImage, triggerOcr } from '@/api/questions';
 import { getStsToken } from '@/api/oss';
 import { useCategoryStore } from '@/stores/categoryStore';
+import { useSubjectStore } from '@/stores/subjectStore';
 import { compressImage, uploadToOss } from '@/utils/image';
+import { NavBar, Button, Picker, Toast, Image, Space, Card, Empty } from 'antd-mobile';
 
 export default function QuestionNew() {
   const navigate = useNavigate();
-  const { categories } = useCategoryStore();
-  const [categoryId, setCategoryId] = useState<number | ''>('');
+  const { categories, fetch: fetchCategories } = useCategoryStore();
+  const { currentSubjectId } = useSubjectStore();
+  const [categoryId, setCategoryId] = useState<number[]>([]);
   const [images, setImages] = useState<{ url: string; type: string; local: string }[]>([]);
-  const [error, setError] = useState('');
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const questionIdRef = useRef<number | null>(null);
 
+  useEffect(() => {
+    if (currentSubjectId) {
+      fetchCategories(currentSubjectId);
+    }
+  }, [currentSubjectId]);
+
+  const pickerColumns = [
+    categories.map((c) => ({ label: '　'.repeat(c.level - 1) + c.name, value: c.id })),
+  ];
+
   const takePhoto = async (type: string) => {
-    setError('');
     try {
       const photo = await Camera.getPhoto({
         quality: 90,
@@ -29,25 +42,26 @@ export default function QuestionNew() {
       const compressed = await compressImage(new File([blob], 'photo.jpg', { type: 'image/jpeg' }));
 
       if (!questionIdRef.current) {
-        if (!categoryId) {
-          setError('请先选择科目/章节');
+        if (!categoryId[0]) {
+          Toast.show({ content: '请先选择章节', icon: 'fail' });
           return;
         }
-        const q = await createQuestion(Number(categoryId));
+        const q = await createQuestion(categoryId[0], currentSubjectId || undefined);
         questionIdRef.current = q.data.id;
       }
 
+      setUploading(true);
       const sts = await getStsToken();
       const key = `questions/user-${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
       const url = await uploadToOss(compressed, sts.data, key);
-
       await addImage(questionIdRef.current, { image_url: url, image_type: type });
       setImages((prev) => [...prev, { url, type, local: photo.webPath! }]);
-
-      // 异步触发 OCR
       triggerOcr(questionIdRef.current).catch(console.error);
+      Toast.show({ content: '上传成功', icon: 'success' });
     } catch (err: any) {
-      setError(err.message || '拍照失败');
+      Toast.show({ content: err.message || '拍照失败', icon: 'fail' });
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -65,60 +79,51 @@ export default function QuestionNew() {
     reference_answer: '参考答案',
   };
 
+  const selectedCategoryName = categories.find((c) => c.id === categoryId[0])?.name || '请选择章节';
+
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center border-b px-4 py-3">
-        <button onClick={() => navigate(-1)} className="text-gray-500">
-          ←
-        </button>
-        <h1 className="mx-auto text-lg font-bold">拍照录入</h1>
-        <button onClick={handleDone} className="text-primary">
-          完成
-        </button>
-      </header>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <NavBar onBack={() => navigate(-1)} right={<Button size="small" color="primary" fill="outline" onClick={handleDone}>完成</Button>}>
+        拍照录入
+      </NavBar>
 
-      <div className="flex-1 overflow-y-auto p-4">
-        {error && <p className="mb-3 text-sm text-danger">{error}</p>}
-
-        <div className="mb-4">
-          <label className="mb-1 block text-sm font-medium">选择章节</label>
-          <select
-            value={categoryId}
-            onChange={(e) => setCategoryId(Number(e.target.value))}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2"
-            disabled={!!questionIdRef.current}
-          >
-            <option value="">请选择</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {'　'.repeat(c.level - 1) + c.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="mb-4 grid grid-cols-3 gap-3">
-          {(['original_question', 'wrong_solution', 'reference_answer'] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => takePhoto(t)}
-              className="flex flex-col items-center rounded-lg border bg-gray-50 py-6 active:bg-gray-100"
-            >
-              <span className="text-2xl">📷</span>
-              <span className="mt-1 text-xs">{typeLabel[t]}</span>
-            </button>
-          ))}
-        </div>
-
-        {images.length > 0 && (
-          <div className="space-y-3">
-            {images.map((img, idx) => (
-              <div key={idx} className="rounded-lg border bg-white p-2">
-                <div className="mb-1 text-xs font-medium text-gray-500">{typeLabel[img.type]}</div>
-                <img src={img.local || img.url} alt="" className="h-40 w-full rounded-md object-contain" />
-              </div>
-            ))}
+      <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+        {!currentSubjectId && (
+          <div style={{ textAlign: 'center', paddingTop: 40 }}>
+            <Empty description="请先选择科目" />
+            <Button color="primary" size="small" onClick={() => navigate('/subjects')} style={{ marginTop: 12 }}>
+              去选择科目
+            </Button>
           </div>
+        )}
+        {currentSubjectId && (
+          <>
+            <Button block fill="outline" onClick={() => setPickerVisible(true)} style={{ marginBottom: 16 }}>
+              {selectedCategoryName}
+            </Button>
+
+            <Picker
+              columns={pickerColumns}
+              visible={pickerVisible}
+              onClose={() => setPickerVisible(false)}
+              value={categoryId}
+              onConfirm={(v) => setCategoryId(v as number[])}
+            />
+
+            <Space wrap block style={{ marginBottom: 16 }}>
+              {(['original_question', 'wrong_solution', 'reference_answer'] as const).map((t) => (
+                <Button key={t} color="primary" fill="outline" onClick={() => takePhoto(t)} loading={uploading} disabled={!categoryId[0] && !questionIdRef.current}>
+                  {typeLabel[t]}
+                </Button>
+              ))}
+            </Space>
+
+            {images.map((img, idx) => (
+              <Card key={idx} title={typeLabel[img.type]} style={{ marginBottom: 12 }}>
+                <Image src={img.local || img.url} style={{ width: '100%', maxHeight: 200 }} fit="contain" />
+              </Card>
+            ))}
+          </>
         )}
       </div>
     </div>

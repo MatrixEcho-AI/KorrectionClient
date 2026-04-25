@@ -1,8 +1,24 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getQuestions, type Question } from '@/api/questions';
+import { getQuestions, deleteQuestion, type Question } from '@/api/questions';
 import { useAuthStore } from '@/stores/authStore';
 import { useCategoryStore } from '@/stores/categoryStore';
+import { useSubjectStore } from '@/stores/subjectStore';
+import {
+  NavBar,
+  Tabs,
+  List,
+  Button,
+  Empty,
+  Tag,
+  SwipeAction,
+  Dialog,
+  Toast,
+  SpinLoading,
+  Image,
+  Picker,
+} from 'antd-mobile';
+import { AddOutline, DeleteOutline, DownOutline } from 'antd-mobile-icons';
 
 const statusMap: Record<string, string> = {
   photo: '拍照',
@@ -12,37 +28,46 @@ const statusMap: Record<string, string> = {
   completed: '完成',
 };
 
-const statusColor: Record<string, string> = {
-  photo: 'bg-gray-100 text-gray-600',
-  summary: 'bg-blue-50 text-blue-600',
-  review: 'bg-yellow-50 text-yellow-700',
-  redo: 'bg-purple-50 text-purple-700',
-  completed: 'bg-green-50 text-green-700',
+const statusColors: Record<string, string> = {
+  photo: '#999',
+  summary: '#1677ff',
+  review: '#ff8f1f',
+  redo: '#873bf4',
+  completed: '#00b578',
 };
 
 export default function Home() {
   const navigate = useNavigate();
   const { logout } = useAuthStore();
   const { fetch: fetchCategories } = useCategoryStore();
+  const { subjects, currentSubjectId, fetch: fetchSubjects, setCurrent, init: initSubject } = useSubjectStore();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [pickerVisible, setPickerVisible] = useState(false);
   const pageSize = 20;
 
   useEffect(() => {
-    fetchCategories();
+    initSubject().then(() => {
+      fetchSubjects();
+    });
   }, []);
 
   useEffect(() => {
+    fetchCategories(currentSubjectId || undefined);
+  }, [currentSubjectId]);
+
+  useEffect(() => {
     loadQuestions(1);
-  }, [statusFilter]);
+  }, [statusFilter, currentSubjectId]);
 
   const loadQuestions = async (p: number) => {
     setLoading(true);
     try {
       const res = await getQuestions({
+        subject_id: currentSubjectId || undefined,
         status: statusFilter || undefined,
         page: p,
         pageSize,
@@ -55,112 +80,140 @@ export default function Home() {
     }
   };
 
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const el = e.currentTarget;
-    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 50 && !loading && questions.length < total) {
-      loadQuestions(page + 1);
+  const currentSubject = subjects.find((s) => s.id === currentSubjectId);
+  const pickerColumns = [subjects.map((s) => ({ label: s.name, value: s.id }))];
+
+  const handleDelete = async (id: number) => {
+    const result = await Dialog.confirm({ content: '确定删除这道题？' });
+    if (result) {
+      await deleteQuestion(id);
+      Toast.show({ content: '已删除', icon: 'success' });
+      loadQuestions(1);
     }
   };
 
+  const rightActions = (id: number) => [
+    {
+      key: 'delete',
+      text: <DeleteOutline />,
+      color: 'danger',
+      onClick: () => handleDelete(id),
+    },
+  ];
+
+  const tabItems = [
+    { key: '', title: '全部' },
+    { key: 'photo', title: '拍照' },
+    { key: 'summary', title: '总结' },
+    { key: 'review', title: '复盘' },
+    { key: 'redo', title: '重做' },
+    { key: 'completed', title: '完成' },
+  ];
+
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center justify-between border-b px-4 py-3">
-        <h1 className="text-lg font-bold">我的错题</h1>
-        <div className="flex gap-3">
-          <button onClick={() => navigate('/export')} className="text-sm text-primary">
-            导出
-          </button>
-          <button onClick={() => navigate('/categories')} className="text-sm text-primary">
-            分类
-          </button>
-          <button onClick={() => navigate('/trash')} className="text-sm text-secondary">
-            回收站
-          </button>
-          <button onClick={logout} className="text-sm text-secondary">
-            退出
-          </button>
-        </div>
-      </header>
-
-      <div className="flex gap-2 overflow-x-auto border-b px-4 py-2">
-        {['', 'photo', 'summary', 'review', 'redo', 'completed'].map((s) => (
-          <button
-            key={s}
-            onClick={() => setStatusFilter(s)}
-            className={`whitespace-nowrap rounded-full px-3 py-1 text-xs ${
-              statusFilter === s ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600'
-            }`}
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <NavBar
+        back={null}
+        left={
+          <div
+            style={{ display: 'flex', alignItems: 'center', gap: 4, fontWeight: 700 }}
+            onClick={() => setPickerVisible(true)}
           >
-            {s ? statusMap[s] : '全部'}
-          </button>
-        ))}
-      </div>
+            <span>{currentSubject ? currentSubject.name : '选择科目'}</span>
+            <DownOutline />
+          </div>
+        }
+        right={
+          <div style={{ display: 'flex', gap: 12, fontSize: 14 }}>
+            <span style={{ color: '#1677ff' }} onClick={() => navigate('/subjects')}>科目</span>
+            <span style={{ color: '#1677ff' }} onClick={() => navigate('/export')}>导出</span>
+            <span style={{ color: '#1677ff' }} onClick={() => navigate('/categories')}>分类</span>
+            <span style={{ color: '#666' }} onClick={() => navigate('/trash')}>回收站</span>
+            <span style={{ color: '#666' }} onClick={logout}>退出</span>
+          </div>
+        }
+      />
 
-      <div className="flex-1 overflow-y-auto p-4" onScroll={handleScroll}>
-        {questions.length === 0 && !loading && (
-          <div className="mt-20 text-center text-gray-400">暂无错题</div>
+      <Tabs activeKey={statusFilter} onChange={(k) => setStatusFilter(k)}>
+        {tabItems.map((item) => (
+          <Tabs.Tab title={item.title} key={item.key} />
+        ))}
+      </Tabs>
+
+      <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
+        {!currentSubject && !loading && (
+          <div style={{ textAlign: 'center', paddingTop: 40 }}>
+            <Empty description="请先选择或添加科目" />
+            <Button color="primary" size="small" onClick={() => navigate('/subjects')} style={{ marginTop: 12 }}>
+              去添加科目
+            </Button>
+          </div>
+        )}
+        {currentSubject && questions.length === 0 && !loading && (
+          <Empty description="暂无错题" />
         )}
 
-        <div className="space-y-3">
+        <List>
           {questions.map((q) => (
-            <div
-              key={q.id}
-              onClick={() => navigate(`/questions/${q.id}`)}
-              className="cursor-pointer rounded-lg border bg-white p-4 shadow-sm active:scale-[0.99]"
-            >
-              <div className="mb-2 flex items-center justify-between">
-                <span className={`rounded-full px-2 py-0.5 text-xs ${statusColor[q.status]}`}>
-                  {statusMap[q.status]}
-                </span>
-                <span className="text-xs text-gray-400">{new Date(q.created_at).toLocaleDateString()}</span>
-              </div>
-              <div className="text-sm text-gray-700">
-                {q.images && q.images.length > 0 ? (
-                  <div className="flex gap-2 overflow-x-auto">
-                    {q.images.map((img) => (
-                      <img
-                        key={img.id}
-                        src={img.image_url}
-                        alt=""
-                        className="h-20 w-20 flex-shrink-0 rounded-md object-cover"
-                      />
-                    ))}
+            <SwipeAction key={q.id} rightActions={rightActions(q.id)}>
+              <List.Item
+                onClick={() => navigate(`/questions/${q.id}`)}
+                prefix={
+                  q.images && q.images.length > 0 ? (
+                    <Image
+                      src={q.images[0].image_url}
+                      style={{ width: 56, height: 56, borderRadius: 8, objectFit: 'cover' }}
+                      fit="cover"
+                    />
+                  ) : (
+                    <div style={{ width: 56, height: 56, borderRadius: 8, background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: 12 }}>无图</div>
+                  )
+                }
+                description={
+                  <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
+                    <Tag color={statusColors[q.status]} fill="outline" style={{ fontSize: 11 }}>
+                      {statusMap[q.status]}
+                    </Tag>
+                    <span style={{ fontSize: 12, color: '#999' }}>{q.category_name || '-'} · 复习{q.review_count}次</span>
                   </div>
-                ) : (
-                  <span className="text-gray-400">暂无图片</span>
-                )}
-              </div>
-              <div className="mt-2 text-xs text-gray-500">
-                {q.category_name || '-'} · 复习 {q.review_count} 次
-              </div>
-              {q.tags && q.tags.length > 0 && (
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {q.tags.map((t) => (
-                    <span key={t.id} className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">
-                      {t.name}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
+                }
+              >
+                <div style={{ fontSize: 14 }}>题目 #{q.id}</div>
+              </List.Item>
+            </SwipeAction>
           ))}
-        </div>
+        </List>
+
+        {questions.length > 0 && questions.length < total && !loading && (
+          <div style={{ textAlign: 'center', padding: 16 }}>
+            <Button onClick={() => loadQuestions(page + 1)}>加载更多</Button>
+          </div>
+        )}
 
         {loading && (
-          <div className="py-4 text-center">
-            <div className="mx-auto h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <div style={{ textAlign: 'center', padding: 16 }}>
+            <SpinLoading color="primary" />
           </div>
         )}
       </div>
 
-      <div className="border-t p-4">
-        <button
-          onClick={() => navigate('/questions/new')}
-          className="w-full rounded-lg bg-primary py-3 font-medium text-white"
-        >
-          + 拍照录入
-        </button>
+      <div style={{ padding: 12, borderTop: '1px solid #eee' }}>
+        <Button block color="primary" size="large" onClick={() => navigate('/questions/new')}>
+          <AddOutline /> 拍照录入
+        </Button>
       </div>
+
+      <Picker
+        columns={pickerColumns}
+        visible={pickerVisible}
+        onClose={() => setPickerVisible(false)}
+        onConfirm={(val) => {
+          const id = val[0] as number;
+          if (id) setCurrent(id);
+          setPickerVisible(false);
+        }}
+        title="选择科目"
+      />
     </div>
   );
 }
