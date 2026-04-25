@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getCategories, createCategory, updateCategory, deleteCategory, type Category } from '@/api/categories';
 import { useSubjectStore } from '@/stores/subjectStore';
-import { NavBar, List, Button, Input, Dialog, Toast, SwipeAction, Space, Modal, Empty } from 'antd-mobile';
-import { AddOutline, EditSOutline, DeleteOutline, DownOutline, RightOutline } from 'antd-mobile-icons';
+import { NavBar, List, Button, Input, Dialog, Toast, SwipeAction, Modal, Empty } from 'antd-mobile';
+import { AddOutline, DownOutline, RightOutline } from 'antd-mobile-icons';
 
 function buildTree(list: Category[]): (Category & { children?: Category[] })[] {
   const map = new Map<number, Category & { children?: Category[] }>();
@@ -25,11 +25,13 @@ function buildTree(list: Category[]): (Category & { children?: Category[] })[] {
 
 function TreeNode({
   node,
+  level,
   onAdd,
   onEdit,
   onDelete,
 }: {
   node: Category & { children?: Category[] };
+  level: number;
   onAdd: (parentId: number) => void;
   onEdit: (id: number, name: string) => void;
   onDelete: (id: number) => void;
@@ -38,35 +40,36 @@ function TreeNode({
   const hasChildren = node.children && node.children.length > 0;
 
   return (
-    <div style={{ marginLeft: 16 }}>
+    <div>
       <SwipeAction
         rightActions={[
-          { key: 'edit', text: <EditSOutline />, color: 'primary', onClick: () => onEdit(node.id, node.name) },
-          { key: 'delete', text: <DeleteOutline />, color: 'danger', onClick: () => onDelete(node.id) },
+          { key: 'edit', text: '编辑', color: 'primary', onClick: () => onEdit(node.id, node.name) },
+          { key: 'delete', text: '删除', color: 'danger', onClick: () => onDelete(node.id) },
         ]}
       >
         <List.Item
-          prefix={
-            <Space>
-              {hasChildren && (
-                <span style={{ color: '#999', fontSize: 12 }} onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}>
-                  {expanded ? <DownOutline /> : <RightOutline />}
-                </span>
-              )}
-              <span style={{ fontSize: 14 }}>{node.name}</span>
-            </Space>
-          }
           extra={
-            <Button size="mini" fill="outline" onClick={() => onAdd(node.id)}>
-              <AddOutline />
+            <Button size="mini" fill="outline" onClick={(e) => { e.stopPropagation(); onAdd(node.id); }}>
+              添加
             </Button>
           }
-        />
+        >
+          <div style={{ marginLeft: level * 20, display: 'flex', alignItems: 'center', gap: 4 }}>
+            {hasChildren ? (
+              <span style={{ color: '#999', fontSize: 12 }} onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}>
+                {expanded ? <DownOutline /> : <RightOutline />}
+              </span>
+            ) : (
+              <span style={{ display: 'inline-block', width: 14 }} />
+            )}
+            <span style={{ fontSize: 14 }}>{node.name}</span>
+          </div>
+        </List.Item>
       </SwipeAction>
       {expanded && hasChildren && (
         <div>
           {node.children!.map((child) => (
-            <TreeNode key={child.id} node={child} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} />
+            <TreeNode key={child.id} node={child} level={level + 1} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} />
           ))}
         </div>
       )}
@@ -155,7 +158,7 @@ export default function Categories() {
       <NavBar onBack={() => navigate(-1)}>章节管理</NavBar>
 
       <div style={{ padding: 12, borderBottom: '1px solid #eee' }}>
-        <Space block>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <Input
             placeholder="新建科目/章节"
             value={addingName}
@@ -163,9 +166,11 @@ export default function Categories() {
             style={{ flex: 1 }}
           />
           <Button color="primary" onClick={handleAdd}>
-            <AddOutline /> 创建
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <AddOutline /> 创建
+            </span>
           </Button>
-        </Space>
+        </div>
         {addingParentId !== null && (
           <div style={{ fontSize: 12, color: '#1677ff', marginTop: 4 }}>
             将作为 ID:{addingParentId} 的子节点创建
@@ -180,6 +185,7 @@ export default function Categories() {
             <TreeNode
               key={node.id}
               node={node}
+              level={0}
               onAdd={(pid) => { setAddingParentId(pid); setAddingName(''); }}
               onEdit={openEdit}
               onDelete={handleDelete}

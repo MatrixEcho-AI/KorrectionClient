@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getSubjects, createSubject, updateSubject, deleteSubject, type Subject } from '@/api/subjects';
 import { useSubjectStore } from '@/stores/subjectStore';
-import { NavBar, List, Button, Input, Dialog, Toast, SwipeAction, Space, Modal, Empty } from 'antd-mobile';
+import { NavBar, List, Button, Input, Dialog, Toast, SwipeAction, Modal, Empty } from 'antd-mobile';
 import { AddOutline, EditSOutline, DeleteOutline } from 'antd-mobile-icons';
 
 export default function Subjects() {
@@ -90,7 +90,7 @@ export default function Subjects() {
       <NavBar onBack={() => navigate(-1)}>科目管理</NavBar>
 
       <div style={{ padding: 12, borderBottom: '1px solid #eee' }}>
-        <Space block>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <Input
             placeholder="新建科目（如：数学）"
             value={addingName}
@@ -102,7 +102,7 @@ export default function Subjects() {
               <AddOutline /> 创建
             </span>
           </Button>
-        </Space>
+        </div>
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto' }}>

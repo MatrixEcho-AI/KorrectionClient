@@ -6,15 +6,42 @@ import { getStsToken } from '@/api/oss';
 import { useCategoryStore } from '@/stores/categoryStore';
 import { useSubjectStore } from '@/stores/subjectStore';
 import { compressImage, uploadToOss } from '@/utils/image';
-import { NavBar, Button, Picker, Toast, Image, Space, Card, Empty } from 'antd-mobile';
+import { NavBar, Button, Cascader, Toast, Image, Space, Card, Empty } from 'antd-mobile';
+
+function buildCascaderOptions(categories: { id: number; parent_id: number; name: string }[]) {
+  const map = new Map<number, { label: string; value: string; children: any[] }>();
+  categories.forEach((c) => map.set(c.id, { label: c.name, value: String(c.id), children: [] }));
+  const roots: any[] = [];
+  categories.forEach((c) => {
+    if (c.parent_id === 0) {
+      roots.push(map.get(c.id)!);
+    } else {
+      const parent = map.get(c.parent_id);
+      if (parent) {
+        parent.children.push(map.get(c.id)!);
+      }
+    }
+  });
+  const clean = (nodes: any[]) => {
+    nodes.forEach((n) => {
+      if (n.children.length === 0) {
+        delete n.children;
+      } else {
+        clean(n.children);
+      }
+    });
+  };
+  clean(roots);
+  return roots;
+}
 
 export default function QuestionNew() {
   const navigate = useNavigate();
   const { categories, fetch: fetchCategories } = useCategoryStore();
   const { currentSubjectId } = useSubjectStore();
-  const [categoryId, setCategoryId] = useState<number[]>([]);
+  const [categoryIdPath, setCategoryIdPath] = useState<string[]>([]);
   const [images, setImages] = useState<{ url: string; type: string; local: string }[]>([]);
-  const [pickerVisible, setPickerVisible] = useState(false);
+  const [cascaderVisible, setCascaderVisible] = useState(false);
   const [uploading, setUploading] = useState(false);
   const questionIdRef = useRef<number | null>(null);
 
@@ -24,9 +51,12 @@ export default function QuestionNew() {
     }
   }, [currentSubjectId]);
 
-  const pickerColumns = [
-    categories.map((c) => ({ label: '　'.repeat(c.level - 1) + c.name, value: c.id })),
-  ];
+  const cascaderOptions = buildCascaderOptions(categories);
+  const selectedCategoryId = categoryIdPath.length > 0 ? Number(categoryIdPath[categoryIdPath.length - 1]) : undefined;
+
+  const selectedCategoryName = categoryIdPath.length > 0
+    ? categoryIdPath.map((id) => categories.find((c) => String(c.id) === id)?.name).filter(Boolean).join(' / ')
+    : '请选择章节';
 
   const takePhoto = async (type: string) => {
     try {
@@ -42,11 +72,11 @@ export default function QuestionNew() {
       const compressed = await compressImage(new File([blob], 'photo.jpg', { type: 'image/jpeg' }));
 
       if (!questionIdRef.current) {
-        if (!categoryId[0]) {
+        if (!selectedCategoryId) {
           Toast.show({ content: '请先选择章节', icon: 'fail' });
           return;
         }
-        const q = await createQuestion(categoryId[0], currentSubjectId || undefined);
+        const q = await createQuestion(selectedCategoryId, currentSubjectId || undefined);
         questionIdRef.current = q.data.id;
       }
 
@@ -79,8 +109,6 @@ export default function QuestionNew() {
     reference_answer: '参考答案',
   };
 
-  const selectedCategoryName = categories.find((c) => c.id === categoryId[0])?.name || '请选择章节';
-
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <NavBar onBack={() => navigate(-1)} right={<Button size="small" color="primary" fill="outline" onClick={handleDone}>完成</Button>}>
@@ -98,21 +126,21 @@ export default function QuestionNew() {
         )}
         {currentSubjectId && (
           <>
-            <Button block fill="outline" onClick={() => setPickerVisible(true)} style={{ marginBottom: 16 }}>
+            <Button block fill="outline" onClick={() => setCascaderVisible(true)} style={{ marginBottom: 16 }}>
               {selectedCategoryName}
             </Button>
 
-            <Picker
-              columns={pickerColumns}
-              visible={pickerVisible}
-              onClose={() => setPickerVisible(false)}
-              value={categoryId}
-              onConfirm={(v) => setCategoryId(v as number[])}
+            <Cascader
+              options={cascaderOptions}
+              visible={cascaderVisible}
+              onClose={() => setCascaderVisible(false)}
+              value={categoryIdPath}
+              onConfirm={(v) => setCategoryIdPath(v as string[])}
             />
 
             <Space wrap block style={{ marginBottom: 16 }}>
               {(['original_question', 'wrong_solution', 'reference_answer'] as const).map((t) => (
-                <Button key={t} color="primary" fill="outline" onClick={() => takePhoto(t)} loading={uploading} disabled={!categoryId[0] && !questionIdRef.current}>
+                <Button key={t} color="primary" fill="outline" onClick={() => takePhoto(t)} loading={uploading} disabled={!selectedCategoryId && !questionIdRef.current}>
                   {typeLabel[t]}
                 </Button>
               ))}
