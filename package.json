@@ -22,6 +22,7 @@
     "ali-oss": "^6.23.0",
     "antd-mobile": "^5.42.3",
     "axios": "^1.8.4",
+    "cropperjs": "^1.6.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.4.0",

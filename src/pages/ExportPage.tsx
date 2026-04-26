@@ -124,7 +124,7 @@ export default function ExportPage() {
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <NavBar onBack={() => navigate(-1)}>导出 PDF</NavBar>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: 12 }}>
         <List header={`选择题目 (${selectedIds.length}/${questions.length})`}>
           <List.Item
             prefix={<Checkbox checked={selectedIds.length === questions.length && questions.length > 0} onChange={toggleAll} />}

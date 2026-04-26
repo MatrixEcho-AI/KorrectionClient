@@ -51,7 +51,7 @@ export default function Trash() {
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <NavBar onBack={() => navigate(-1)}>回收站</NavBar>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: 12 }}>
         {questions.length === 0 && !loading && (
           <Empty description="回收站为空" />
         )}

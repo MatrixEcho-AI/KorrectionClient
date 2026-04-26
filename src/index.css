@@ -1,3 +1,5 @@
+@import 'cropperjs/dist/cropper.css';
+
 .adm-swipe-action-actions {
   pointer-events: auto !important;
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getQuestion, deleteQuestion, updateQuestion, getPendingRedos, type Question, type RedoSession } from '@/api/questions';
-import { NavBar, Button, SpinLoading, Image, Tag, Toast, Dialog } from 'antd-mobile';
+import { NavBar, Button, SpinLoading, Image, Tag, Toast, Dialog, ImageViewer } from 'antd-mobile';
 
 const statusMap: Record<string, string> = {
   photo: '拍照',
@@ -26,6 +26,8 @@ export default function QuestionDetail() {
   const [pendingRedos, setPendingRedos] = useState<RedoSession[]>([]);
   const [expandedOcr, setExpandedOcr] = useState<Record<number, boolean>>({});
   const [deleteVisible, setDeleteVisible] = useState(false);
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
 
   useEffect(() => {
     load();
@@ -110,36 +112,63 @@ export default function QuestionDetail() {
         题目详情
       </NavBar>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
-        {detail?.images?.map((img: any) => (
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: 16 }}>
+        {detail?.images?.map((img: any, index: number) => (
           <div key={img.id} style={{ marginBottom: 16, borderRadius: 8, border: '1px solid #eee', padding: 12, background: '#fff' }}>
             <div style={{ fontSize: 12, fontWeight: 500, color: '#666', marginBottom: 8 }}>{typeLabel[img.image_type]}</div>
-            <Image src={img.image_url} style={{ width: '100%', maxHeight: 192, borderRadius: 4 }} fit="contain" />
+            <Image
+              src={img.image_url}
+              style={{ width: '100%', maxHeight: 192, borderRadius: 4 }}
+              fit="contain"
+              onClick={() => {
+                setViewerIndex(index);
+                setViewerVisible(true);
+              }}
+            />
             {img.ocr_text && (
               <div style={{ marginTop: 8 }}>
-                {!expandedOcr[img.id] ? (
-                  <Button
-                    size="small"
-                    fill="outline"
-                    onClick={() => toggleOcr(img.id)}
+                <div style={{ position: 'relative' }}>
+                  <div
+                    style={{
+                      padding: 8,
+                      background: '#f5f5f5',
+                      borderRadius: 4,
+                      fontSize: 12,
+                      color: '#666',
+                      whiteSpace: 'pre-wrap',
+                      overflow: 'hidden',
+                      maxHeight: expandedOcr[img.id] ? undefined : 68,
+                    }}
                   >
-                    展开 OCR 识别结果
-                  </Button>
-                ) : (
-                  <div>
-                    <div style={{ padding: 8, background: '#f5f5f5', borderRadius: 4, fontSize: 12, color: '#666', whiteSpace: 'pre-wrap' }}>
-                      {img.ocr_text}
-                    </div>
-                    <Button
-                      size="small"
-                      fill="outline"
-                      style={{ marginTop: 8 }}
-                      onClick={() => toggleOcr(img.id)}
-                    >
-                      收起 OCR 识别结果
-                    </Button>
+                    {img.ocr_text}
                   </div>
-                )}
+                  {!expandedOcr[img.id] && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: 24,
+                        background: 'linear-gradient(to bottom, rgba(245,245,245,0) 0%, rgba(245,245,245,0.85) 60%, rgba(245,245,245,1) 100%)',
+                        pointerEvents: 'none',
+                      }}
+                    />
+                  )}
+                </div>
+                <div
+                  style={{
+                    textAlign: 'center',
+                    padding: '4px 0 2px',
+                    fontSize: 12,
+                    color: '#999',
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                  }}
+                  onClick={() => toggleOcr(img.id)}
+                >
+                  {expandedOcr[img.id] ? '▲ 收起' : '▼ 展开'}
+                </div>
               </div>
             )}
           </div>
@@ -216,6 +245,13 @@ export default function QuestionDetail() {
           { key: 'cancel', text: '取消', onClick: () => setDeleteVisible(false) },
           { key: 'confirm', text: '确定', danger: true, bold: true, onClick: confirmDelete },
         ]}
+      />
+
+      <ImageViewer.Multi
+        images={detail?.images?.map((i: any) => i.image_url) || []}
+        visible={viewerVisible}
+        defaultIndex={viewerIndex}
+        onClose={() => setViewerVisible(false)}
       />
     </div>
   );

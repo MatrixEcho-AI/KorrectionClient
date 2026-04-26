@@ -97,7 +97,7 @@ export default function BatchReview() {
         批量复盘 ({currentIndex + 1}/{questions.length})
       </NavBar>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: 16 }}>
         {current.images?.map((img) => (
           <div key={img.id} style={{ marginBottom: 16, borderRadius: 8, border: '1px solid #eee', padding: 12, background: '#fff' }}>
             <div style={{ fontSize: 12, fontWeight: 500, color: '#666', marginBottom: 8 }}>{typeLabel[img.image_type]}</div>

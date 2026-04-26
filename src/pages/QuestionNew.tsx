@@ -4,8 +4,10 @@ import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { createQuestion, uploadImage, triggerOcr } from '@/api/questions';
 import { useCategoryStore } from '@/stores/categoryStore';
 import { useSubjectStore } from '@/stores/subjectStore';
-import { compressImage } from '@/utils/image';
-import { NavBar, Button, Cascader, Toast, Image, Space, Card, Empty } from 'antd-mobile';
+import { enhanceDocument } from '@/utils/image';
+import { NavBar, Button, Cascader, Toast, Image, Card, Empty } from 'antd-mobile';
+import { DeleteOutline } from 'antd-mobile-icons';
+import Cropper from 'cropperjs';
 
 function buildCascaderOptions(categories: { id: number; parent_id: number; name: string }[]) {
   const map = new Map<number, { label: string; value: string; children: any[] }>();
@@ -39,16 +41,44 @@ export default function QuestionNew() {
   const { categories, fetch: fetchCategories } = useCategoryStore();
   const { currentSubjectId } = useSubjectStore();
   const [categoryIdPath, setCategoryIdPath] = useState<string[]>([]);
-  const [images, setImages] = useState<{ url: string; type: string; local: string }[]>([]);
+  const [images, setImages] = useState<{ type: string; file: File; preview: string }[]>([]);
   const [cascaderVisible, setCascaderVisible] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const questionIdRef = useRef<number | null>(null);
+
+  const [editorVisible, setEditorVisible] = useState(false);
+  const [editorImage, setEditorImage] = useState('');
+  const [editorType, setEditorType] = useState('');
+  const [sharpenEnabled, setSharpenEnabled] = useState(true);
+  const cropperRef = useRef<Cropper | null>(null);
+  const editorImgRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
     if (currentSubjectId) {
       fetchCategories(currentSubjectId);
     }
   }, [currentSubjectId]);
+
+  useEffect(() => {
+    if (editorVisible && editorImgRef.current) {
+      const cropper = new Cropper(editorImgRef.current, {
+        viewMode: 1,
+        dragMode: 'move',
+        autoCropArea: 0.9,
+        restore: false,
+        guides: true,
+        center: true,
+        highlight: false,
+        cropBoxMovable: true,
+        cropBoxResizable: true,
+        toggleDragModeOnDblclick: false,
+      });
+      cropperRef.current = cropper;
+      return () => {
+        cropper.destroy();
+        cropperRef.current = null;
+      };
+    }
+  }, [editorVisible, editorImage]);
 
   const cascaderOptions = buildCascaderOptions(categories);
   const selectedCategoryId = categoryIdPath.length > 0 ? Number(categoryIdPath[categoryIdPath.length - 1]) : undefined;
@@ -59,59 +89,92 @@ export default function QuestionNew() {
 
   const takePhoto = async (type: string) => {
     try {
-      console.log('[PHOTO] START takePhoto', { type });
       const photo = await Camera.getPhoto({
         quality: 90,
         allowEditing: false,
         resultType: CameraResultType.Uri,
         source: CameraSource.Prompt,
       });
-      console.log('[PHOTO] Camera result', photo);
-      if (!photo.webPath) {
-        console.log('[PHOTO] No webPath, abort');
-        return;
-      }
-
-      const blob = await fetch(photo.webPath).then((r) => r.blob());
-      console.log('[PHOTO] Blob size', blob.size);
-      const compressed = await compressImage(new File([blob], 'photo.jpg', { type: 'image/jpeg' }));
-      console.log('[PHOTO] Compressed size', compressed.size);
-      const uploadFile = new File([compressed], 'photo.jpg', { type: 'image/jpeg' });
-
-      if (!questionIdRef.current) {
-        if (!selectedCategoryId) {
-          Toast.show({ content: '请先选择章节', icon: 'fail' });
-          return;
-        }
-        const q = await createQuestion(selectedCategoryId, currentSubjectId || undefined);
-        questionIdRef.current = q.data.id;
-        console.log('[PHOTO] Question created', q.data.id);
-      }
-
-      setUploading(true);
-      console.log('[PHOTO] Uploading via backend...');
-      const formData = new FormData();
-      formData.append('image', uploadFile);
-      formData.append('image_type', type);
-      const uploadResult = await uploadImage(questionIdRef.current, formData);
-      const url = uploadResult.data.image_url;
-      console.log('[PHOTO] Upload success', url);
-      setImages((prev) => [...prev, { url, type, local: photo.webPath! }]);
-      triggerOcr(questionIdRef.current).catch(console.error);
-      Toast.show({ content: '上传成功', icon: 'success' });
+      if (!photo.webPath) return;
+      setEditorImage(photo.webPath);
+      setEditorType(type);
+      setSharpenEnabled(true);
+      setEditorVisible(true);
     } catch (err: any) {
-      console.error('[PHOTO] ERROR:', err);
       Toast.show({ content: err.message || '拍照失败', icon: 'fail' });
-    } finally {
-      setUploading(false);
     }
   };
 
-  const handleDone = () => {
-    if (questionIdRef.current) {
-      navigate(`/questions/${questionIdRef.current}`);
-    } else {
+  const handleEditorConfirm = async () => {
+    if (!cropperRef.current) return;
+    setEditorVisible(false);
+
+    const canvas = cropperRef.current.getCroppedCanvas({
+      maxWidth: 1920,
+      maxHeight: 1920,
+      fillColor: '#fff',
+    });
+
+    if (!canvas) {
+      Toast.show({ content: '裁剪失败', icon: 'fail' });
+      return;
+    }
+
+    if (sharpenEnabled) {
+      enhanceDocument(canvas);
+    }
+
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (b) => (b ? resolve(b) : reject(new Error('Canvas to blob failed'))),
+        'image/jpeg',
+        0.92
+      );
+    });
+
+    const file = new File([blob], 'photo.jpg', { type: 'image/jpeg' });
+    const preview = URL.createObjectURL(file);
+    setImages((prev) => [...prev, { type: editorType, file, preview }]);
+    setEditorImage('');
+    setEditorType('');
+  };
+
+  const handleRemoveImage = (index: number) => {
+    setImages((prev) => {
+      const item = prev[index];
+      if (item) URL.revokeObjectURL(item.preview);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  const handleDone = async () => {
+    if (images.length === 0) {
       navigate('/');
+      return;
+    }
+    if (!selectedCategoryId) {
+      Toast.show({ content: '请先选择章节', icon: 'fail' });
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const q = await createQuestion(selectedCategoryId, currentSubjectId || undefined);
+      const questionId = q.data.id;
+
+      for (const img of images) {
+        const formData = new FormData();
+        formData.append('image', img.file);
+        formData.append('image_type', img.type);
+        await uploadImage(questionId, formData);
+      }
+
+      triggerOcr(questionId).catch(console.error);
+      Toast.show({ content: '上传成功', icon: 'success' });
+      navigate(`/questions/${questionId}`);
+    } catch (err: any) {
+      Toast.show({ content: err.message || '上传失败', icon: 'fail' });
+      setUploading(false);
     }
   };
 
@@ -123,11 +186,11 @@ export default function QuestionNew() {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <NavBar onBack={() => navigate(-1)} right={<Button size="small" color="primary" fill="outline" onClick={handleDone}>完成</Button>}>
+      <NavBar onBack={() => navigate(-1)} right={<Button size="small" color="primary" fill="outline" onClick={handleDone} loading={uploading}>完成</Button>}>
         拍照录入
       </NavBar>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: 16, paddingBottom: 80 }}>
         {!currentSubjectId && (
           <div style={{ textAlign: 'center', paddingTop: 40 }}>
             <Empty description="请先选择科目" />
@@ -150,22 +213,68 @@ export default function QuestionNew() {
               onConfirm={(v) => setCategoryIdPath(v as string[])}
             />
 
-            <Space wrap block style={{ marginBottom: 16 }}>
-              {(['original_question', 'wrong_solution', 'reference_answer'] as const).map((t) => (
-                <Button key={t} color="primary" fill="outline" onClick={() => takePhoto(t)} loading={uploading} disabled={!selectedCategoryId && !questionIdRef.current}>
-                  {typeLabel[t]}
-                </Button>
-              ))}
-            </Space>
-
             {images.map((img, idx) => (
-              <Card key={idx} title={typeLabel[img.type]} style={{ marginBottom: 12 }}>
-                <Image src={img.local || img.url} style={{ width: '100%', maxHeight: 200 }} fit="contain" />
+              <Card
+                key={idx}
+                title={typeLabel[img.type]}
+                style={{ marginBottom: 12 }}
+                extra={
+                  <Button size="small" fill="none" style={{ color: '#ff3141' }} onClick={() => handleRemoveImage(idx)}>
+                    <DeleteOutline />
+                  </Button>
+                }
+              >
+                <Image src={img.preview} style={{ width: '100%', maxHeight: 200 }} fit="contain" />
               </Card>
             ))}
           </>
         )}
       </div>
+
+      {currentSubjectId && (
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: 12, background: '#fff', borderTop: '1px solid #eee', zIndex: 100, display: 'flex', justifyContent: 'center', gap: 8 }}>
+          {(['original_question', 'wrong_solution', 'reference_answer'] as const).map((t) => (
+            <Button key={t} color="primary" fill="outline" onClick={() => takePhoto(t)} loading={uploading}>
+              {typeLabel[t]}
+            </Button>
+          ))}
+        </div>
+      )}
+
+      {editorVisible && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: '#000', display: 'flex', flexDirection: 'column' }}>
+          <NavBar
+            onBack={() => { setEditorVisible(false); setEditorImage(''); setEditorType(''); }}
+            right={<Button size="small" color="primary" onClick={handleEditorConfirm}>确认</Button>}
+          >
+            编辑图片
+          </NavBar>
+          <div style={{ flex: 1, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <img
+              ref={editorImgRef}
+              src={editorImage}
+              alt="edit"
+              style={{ maxWidth: '100%', maxHeight: '100%', display: 'block' }}
+            />
+          </div>
+          <div style={{ padding: 12, background: '#1a1a1a', display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
+            <Button size="small" fill="outline" style={{ color: '#fff' }} onClick={() => { cropperRef.current?.rotate(-90); }}>
+              左旋90°
+            </Button>
+            <Button size="small" fill="outline" style={{ color: '#fff' }} onClick={() => { cropperRef.current?.rotate(90); }}>
+              右旋90°
+            </Button>
+            <Button
+              size="small"
+              fill={sharpenEnabled ? 'solid' : 'outline'}
+              color={sharpenEnabled ? 'primary' : 'default'}
+              onClick={() => setSharpenEnabled(!sharpenEnabled)}
+            >
+              {sharpenEnabled ? '锐化: 开' : '锐化: 关'}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -113,7 +113,7 @@ export default function Subjects() {
         </div>
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
         <List>
           {subjects.map((s) => (
             <SwipeAction

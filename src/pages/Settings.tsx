@@ -36,7 +36,7 @@ export default function Settings() {
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <NavBar onBack={() => navigate(-1)}>设置</NavBar>
 
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
         <List header="用户信息">
           <List.Item extra={user?.phone || '-'}>手机号</List.Item>
         </List>
@@ -54,12 +54,12 @@ export default function Settings() {
             关于 App
           </List.Item>
         </List>
+      </div>
 
-        <div style={{ padding: 24 }}>
-          <Button block color="danger" onClick={handleLogout}>
-            退出账号
-          </Button>
-        </div>
+      <div style={{ padding: 24, borderTop: '1px solid #eee' }}>
+        <Button block color="danger" onClick={handleLogout}>
+          退出账号
+        </Button>
       </div>
 
       <Dialog

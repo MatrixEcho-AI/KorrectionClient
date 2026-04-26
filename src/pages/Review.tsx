@@ -51,7 +51,7 @@ export default function Review() {
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <NavBar onBack={() => navigate(-1)}>复盘</NavBar>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: 16 }}>
         {detail.images?.map((img: any) => (
           <div key={img.id} style={{ marginBottom: 16, borderRadius: 8, border: '1px solid #eee', padding: 12, background: '#fff' }}>
             <div style={{ fontSize: 12, fontWeight: 500, color: '#666', marginBottom: 8 }}>{typeLabel[img.image_type]}</div>

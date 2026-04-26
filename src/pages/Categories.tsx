@@ -193,7 +193,7 @@ export default function Categories() {
         )}
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
         <List>
           {tree.map((node) => (
             <TreeNode

@@ -67,7 +67,7 @@ export default function Redo() {
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <NavBar onBack={() => navigate(-1)}>AI 重做</NavBar>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: 16 }}>
         {error && <div style={{ marginBottom: 12, color: '#ff3141', fontSize: 14 }}>{error}</div>}
 
         {loading && !q && (

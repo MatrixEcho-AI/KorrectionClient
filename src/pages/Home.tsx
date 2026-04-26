@@ -136,7 +136,7 @@ export default function Home() {
         ))}
       </Tabs>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: 12, paddingBottom: (statusFilter === 'redo' || statusFilter === 'completed') ? 12 : 80 }}>
         {!currentSubject && !loading && (
           <div style={{ textAlign: 'center', paddingTop: 80 }}>
             <Empty description="请先选择或添加科目" />
@@ -239,7 +239,7 @@ export default function Home() {
         )}
       </div>
 
-      <div style={{ padding: 12, borderTop: '1px solid #eee' }}>
+      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: 12, background: '#fff', borderTop: '1px solid #eee', zIndex: 100 }}>
         {statusFilter === 'summary,review' ? (
           <Button block color="primary" size="large" onClick={() => navigate('/batch-review')}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
