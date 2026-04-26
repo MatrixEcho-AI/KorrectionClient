@@ -4,6 +4,8 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { getProxyImageUrl } from '@/api/images';
 
+export type PageSize = 'a4' | 'a5' | 'b4' | 'b5';
+
 export interface PdfRecord {
   id: string;
   filename: string;
@@ -143,37 +145,66 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 export async function generateAndSavePdf(
   element: HTMLElement,
   title: string,
-  questionCount: number
+  questionCount: number,
+  pageSize: PageSize = 'a4'
 ): Promise<PdfRecord> {
   const replacements = await preloadImages(element);
 
   try {
-    const canvas = await html2canvas(element, {
-      scale: 2,
-      useCORS: false,
-      backgroundColor: '#ffffff',
-      logging: false,
-    });
-
-    const imgData = canvas.toDataURL('image/jpeg', 0.92);
-    const pdf = new jsPDF('p', 'mm', 'a4');
+    const margin = 20; // 2cm
+    const pdf = new jsPDF('p', 'mm', pageSize);
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = pdf.internal.pageSize.getHeight();
-    const imgProps = pdf.getImageProperties(imgData);
-    const imgWidth = pdfWidth;
-    const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
+    const usableWidth = pdfWidth - 2 * margin;
+    const usableHeight = pdfHeight - 2 * margin;
 
-    let heightLeft = imgHeight;
-    let position = 0;
+    const questionDivs = Array.from(element.children) as HTMLElement[];
 
-    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-    heightLeft -= pdfHeight;
+    for (let i = 0; i < questionDivs.length; i++) {
+      // Each question starts at the top of a new page
+      if (i > 0) {
+        pdf.addPage();
+      }
 
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight;
-      pdf.addPage();
-      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pdfHeight;
+      let y = margin;
+      const blocks = Array.from(questionDivs[i].children) as HTMLElement[];
+
+      for (const block of blocks) {
+        const canvas = await html2canvas(block, {
+          scale: 2,
+          useCORS: false,
+          backgroundColor: '#ffffff',
+          logging: false,
+        });
+
+        const imgData = canvas.toDataURL('image/jpeg', 0.92);
+        const imgProps = pdf.getImageProperties(imgData);
+        const blockHeight = (imgProps.height * usableWidth) / imgProps.width;
+        const bottom = margin + usableHeight;
+
+        if (blockHeight > usableHeight) {
+          // Block alone exceeds usable height — scale to fit
+          if (y > margin) {
+            pdf.addPage();
+            y = margin;
+          }
+          const scale = usableHeight / blockHeight;
+          const w = usableWidth * scale;
+          const x = margin + (usableWidth - w) / 2;
+          pdf.addImage(imgData, 'JPEG', x, y, w, usableHeight);
+          y = bottom; // force next block onto a new page
+        } else if (y + blockHeight > bottom) {
+          // Block doesn't fit on remaining space — move to next page
+          pdf.addPage();
+          y = margin;
+          pdf.addImage(imgData, 'JPEG', margin, y, usableWidth, blockHeight);
+          y += blockHeight;
+        } else {
+          // Fits on current page
+          pdf.addImage(imgData, 'JPEG', margin, y, usableWidth, blockHeight);
+          y += blockHeight;
+        }
+      }
     }
 
     const pdfBlob = pdf.output('blob');

@@ -5,7 +5,7 @@ import { exportData } from '@/api/export';
 import { getCategories, type Category } from '@/api/categories';
 import { getTags, type Tag } from '@/api/tags';
 import { useSubjectStore } from '@/stores/subjectStore';
-import { generateAndSavePdf, type PdfRecord } from '@/utils/pdfExport';
+import { generateAndSavePdf, type PdfRecord, type PageSize } from '@/utils/pdfExport';
 import { NavBar, List, Button, Checkbox, Toast, SpinLoading, Picker } from 'antd-mobile';
 
 const optionLabels: Record<string, string> = {
@@ -47,6 +47,8 @@ export default function ExportPage() {
   });
   const [sortField, setSortField] = useState('created_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [pageSize, setPageSize] = useState<PageSize>('a4');
+  const [pageSizePickerVisible, setPageSizePickerVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [listLoading, setListLoading] = useState(false);
   const [sortPickerVisible, setSortPickerVisible] = useState(false);
@@ -94,7 +96,8 @@ export default function ExportPage() {
         const record = await generateAndSavePdf(
           printRef.current!,
           `错题导出 (${selectedIds.length}题)`,
-          selectedIds.length
+          selectedIds.length,
+          pageSize
         );
         setPendingExport(false);
         setLastRecord(record);
@@ -176,8 +179,27 @@ export default function ExportPage() {
     { label: '升序', value: 'asc' },
   ];
 
+  const pageSizeOptions = [
+    { label: 'A4 (210×297mm)', value: 'a4' },
+    { label: 'A5 (148×210mm)', value: 'a5' },
+    { label: 'B4 (250×353mm)', value: 'b4' },
+    { label: 'B5 (176×250mm)', value: 'b5' },
+  ];
+
+  const pageDimensions: Record<PageSize, { w: number; h: number }> = {
+    a4: { w: 210, h: 297 },
+    a5: { w: 148, h: 210 },
+    b4: { w: 250, h: 353 },
+    b5: { w: 176, h: 250 },
+  };
+
+  // Half usable page height in CSS px (container is 794px = A4 width)
+  const dims = pageDimensions[pageSize];
+  const maxImgHeightPx = Math.round((dims.h - 40) / 2 * 794 / dims.w);
+
   const sortFieldLabel = sortFieldOptions.find((o) => o.value === sortField)?.label || '创建时间';
   const sortOrderLabel = sortOrderOptions.find((o) => o.value === sortOrder)?.label || '降序';
+  const pageSizeLabel = pageSizeOptions.find((o) => o.value === pageSize)?.label || 'A4';
 
   const categoryOptions = [
     { label: '全部章节', value: 0 },
@@ -226,21 +248,25 @@ export default function ExportPage() {
           const refImages = q.images?.filter((i: any) => i.image_type === 'reference_answer') || [];
 
           return (
-            <div key={q.id} style={{ pageBreakInside: 'avoid', marginBottom: 24, borderBottom: '1px solid #eee', paddingBottom: 16 }}>
+            <div key={q.id} style={{ marginBottom: 24, borderBottom: '1px solid #eee', paddingBottom: 16 }}>
               <div style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10, color: '#111' }}>题目 {idx + 1}</div>
               {include.originalImage && origImages.map((img: any) => (
                 <div key={img.id}>
-                  <img src={img.image_url} style={{ maxWidth: '100%', display: 'block', margin: '8px 0', border: '1px solid #ddd', borderRadius: 4 }} alt="" />
+                  <img src={img.image_url} style={{ maxWidth: '100%', maxHeight: maxImgHeightPx, objectFit: 'contain', display: 'block', margin: '8px 0', border: '1px solid #ddd', borderRadius: 4 }} alt="" />
                   {include.originalOcr && img.ocr_text && (
                     <div style={{ background: '#f8f9fa', padding: 8, borderRadius: 4, margin: '6px 0', fontSize: 13, color: '#555', whiteSpace: 'pre-wrap' }}>{img.ocr_text}</div>
                   )}
                 </div>
               ))}
               {include.wrongSolutionImage && wrongImages.map((img: any) => (
-                <img key={img.id} src={img.image_url} style={{ maxWidth: '100%', display: 'block', margin: '8px 0', border: '1px solid #ddd', borderRadius: 4 }} alt="" />
+                <div key={img.id}>
+                  <img src={img.image_url} style={{ maxWidth: '100%', maxHeight: maxImgHeightPx, objectFit: 'contain', display: 'block', margin: '8px 0', border: '1px solid #ddd', borderRadius: 4 }} alt="" />
+                </div>
               ))}
               {include.referenceImage && refImages.map((img: any) => (
-                <img key={img.id} src={img.image_url} style={{ maxWidth: '100%', display: 'block', margin: '8px 0', border: '1px solid #ddd', borderRadius: 4 }} alt="" />
+                <div key={img.id}>
+                  <img src={img.image_url} style={{ maxWidth: '100%', maxHeight: maxImgHeightPx, objectFit: 'contain', display: 'block', margin: '8px 0', border: '1px solid #ddd', borderRadius: 4 }} alt="" />
+                </div>
               ))}
               {include.reason && q.reason_text && (
                 <div style={{ margin: '4px 0', fontSize: 13, color: '#444' }}><strong>错题原因:</strong> {q.reason_text}</div>
@@ -452,6 +478,17 @@ export default function ExportPage() {
           </List.Item>
         </List>
 
+        {/* ── 页面尺寸 ── */}
+        <List header="页面尺寸" style={{ marginTop: 12 }}>
+          <List.Item
+            extra={pageSizeLabel}
+            onClick={() => setPageSizePickerVisible(true)}
+            arrow
+          >
+            纸张大小
+          </List.Item>
+        </List>
+
         {lastRecord && (
           <div style={{ marginTop: 12, padding: 12, background: '#f6ffed', borderRadius: 8, border: '1px solid #b7eb8f' }}>
             <div style={{ fontWeight: 500, color: '#389e0d', marginBottom: 4 }}>导出成功</div>
@@ -477,6 +514,14 @@ export default function ExportPage() {
           value={[sortOrder]}
           onConfirm={(v) => { setSortOrder(v[0] as 'asc' | 'desc'); setOrderPickerVisible(false); }}
           title="排序方向"
+        />
+        <Picker
+          columns={[pageSizeOptions]}
+          visible={pageSizePickerVisible}
+          onClose={() => setPageSizePickerVisible(false)}
+          value={[pageSize]}
+          onConfirm={(v) => { setPageSize(v[0] as PageSize); setPageSizePickerVisible(false); }}
+          title="页面尺寸"
         />
       </div>
 
