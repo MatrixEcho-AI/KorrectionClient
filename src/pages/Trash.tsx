@@ -10,6 +10,8 @@ export default function Trash() {
   const { currentSubjectId } = useSubjectStore();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(false);
+  const [deleteVisible, setDeleteVisible] = useState(false);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
 
   useEffect(() => {
     load();
@@ -31,11 +33,17 @@ export default function Trash() {
     await load();
   };
 
-  const handleDelete = async (id: number) => {
-    const result = await Dialog.confirm({ content: '彻底删除后无法恢复，确定吗？' });
-    if (!result) return;
-    await permanentDeleteQuestion(id);
+  const handleDelete = (id: number) => {
+    setDeleteId(id);
+    setDeleteVisible(true);
+  };
+
+  const confirmDelete = async () => {
+    if (deleteId === null) return;
+    await permanentDeleteQuestion(deleteId);
     Toast.show({ content: '已删除', icon: 'success' });
+    setDeleteVisible(false);
+    setDeleteId(null);
     await load();
   };
 
@@ -79,6 +87,17 @@ export default function Trash() {
           </div>
         )}
       </div>
+
+      <Dialog
+        visible={deleteVisible}
+        content="彻底删除后无法恢复，确定吗？"
+        closeOnAction
+        onClose={() => { setDeleteVisible(false); setDeleteId(null); }}
+        actions={[
+          { key: 'cancel', text: '取消', onClick: () => { setDeleteVisible(false); setDeleteId(null); } },
+          { key: 'confirm', text: '确定', danger: true, bold: true, onClick: confirmDelete },
+        ]}
+      />
     </div>
   );
 }

@@ -14,6 +14,8 @@ export default function Subjects() {
   const [editVisible, setEditVisible] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
+  const [deleteVisible, setDeleteVisible] = useState(false);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
 
   useEffect(() => {
     load();
@@ -63,12 +65,16 @@ export default function Subjects() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    const result = await Dialog.confirm({ content: '确定删除该科目？关联的章节和题目将受影响。' });
-    if (!result) return;
+  const handleDelete = (id: number) => {
+    setDeleteId(id);
+    setDeleteVisible(true);
+  };
+
+  const confirmDelete = async () => {
+    if (deleteId === null) return;
     try {
-      await deleteSubject(id);
-      if (currentSubjectId === id) {
+      await deleteSubject(deleteId);
+      if (currentSubjectId === deleteId) {
         await setCurrent(null);
       }
       await load();
@@ -77,6 +83,8 @@ export default function Subjects() {
     } catch (err: any) {
       Toast.show({ content: err.message, icon: 'fail' });
     }
+    setDeleteVisible(false);
+    setDeleteId(null);
   };
 
   const handleSelect = async (id: number) => {
@@ -114,6 +122,12 @@ export default function Subjects() {
                 { key: 'edit', text: <EditSOutline />, color: 'primary', onClick: () => openEdit(s.id, s.name) },
                 { key: 'delete', text: <DeleteOutline />, color: 'danger', onClick: () => handleDelete(s.id) },
               ]}
+              onAction={(action) => {
+                if (action.key === 'edit') openEdit(s.id, s.name);
+                if (action.key === 'delete') handleDelete(s.id);
+              }}
+              closeOnAction
+              closeOnTouchOutside
             >
               <List.Item
                 onClick={() => handleSelect(s.id)}
@@ -141,6 +155,17 @@ export default function Subjects() {
         actions={[
           { key: 'cancel', text: '取消', onClick: () => setEditVisible(false) },
           { key: 'confirm', text: '保存', primary: true, onClick: handleEditSave },
+        ]}
+      />
+
+      <Dialog
+        visible={deleteVisible}
+        content="确定删除该科目？关联的章节和题目将受影响。"
+        closeOnAction
+        onClose={() => { setDeleteVisible(false); setDeleteId(null); }}
+        actions={[
+          { key: 'cancel', text: '取消', onClick: () => { setDeleteVisible(false); setDeleteId(null); } },
+          { key: 'confirm', text: '确定', danger: true, bold: true, onClick: confirmDelete },
         ]}
       />
     </div>

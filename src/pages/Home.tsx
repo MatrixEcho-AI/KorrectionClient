@@ -44,6 +44,8 @@ export default function Home() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [pickerVisible, setPickerVisible] = useState(false);
+  const [deleteVisible, setDeleteVisible] = useState(false);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
   const pageSize = 20;
 
   useEffect(() => {
@@ -81,12 +83,17 @@ export default function Home() {
   const pickerColumns = [subjects.map((s) => ({ label: s.name, value: s.id }))];
 
   const handleDelete = async (id: number) => {
-    const result = await Dialog.confirm({ content: '确定删除这道题？' });
-    if (result) {
-      await deleteQuestion(id);
-      Toast.show({ content: '已删除', icon: 'success' });
-      loadQuestions(1);
-    }
+    setDeleteId(id);
+    setDeleteVisible(true);
+  };
+
+  const confirmDelete = async () => {
+    if (deleteId === null) return;
+    await deleteQuestion(deleteId);
+    Toast.show({ content: '已删除', icon: 'success' });
+    loadQuestions(1);
+    setDeleteVisible(false);
+    setDeleteId(null);
   };
 
 
@@ -258,6 +265,17 @@ export default function Home() {
           setPickerVisible(false);
         }}
         title="选择科目"
+      />
+
+      <Dialog
+        visible={deleteVisible}
+        content="确定删除这道题？"
+        closeOnAction
+        onClose={() => { setDeleteVisible(false); setDeleteId(null); }}
+        actions={[
+          { key: 'cancel', text: '取消', onClick: () => { setDeleteVisible(false); setDeleteId(null); } },
+          { key: 'confirm', text: '确定', danger: true, bold: true, onClick: confirmDelete },
+        ]}
       />
     </div>
   );

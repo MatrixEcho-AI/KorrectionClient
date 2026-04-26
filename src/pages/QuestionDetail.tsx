@@ -25,6 +25,7 @@ export default function QuestionDetail() {
   const [loading, setLoading] = useState(true);
   const [pendingRedos, setPendingRedos] = useState<RedoSession[]>([]);
   const [expandedOcr, setExpandedOcr] = useState<Record<number, boolean>>({});
+  const [deleteVisible, setDeleteVisible] = useState(false);
 
   useEffect(() => {
     load();
@@ -87,11 +88,14 @@ export default function QuestionDetail() {
     load();
   };
 
-  const handleDelete = async () => {
-    const result = await Dialog.confirm({ content: '确定删除这道题？可在回收站恢复。' });
-    if (!result) return;
+  const handleDeleteClick = () => {
+    setDeleteVisible(true);
+  };
+
+  const confirmDelete = async () => {
     await deleteQuestion(Number(id));
     Toast.show({ content: '已删除', icon: 'success' });
+    setDeleteVisible(false);
     navigate('/');
   };
 
@@ -198,10 +202,21 @@ export default function QuestionDetail() {
         {q.status === 'redo' && (
           <Button block color="primary" size="large" onClick={handleComplete}>标记为完成</Button>
         )}
-        <Button block fill="outline" size="large" style={{ color: '#ff3141' }} onClick={handleDelete}>
+        <Button block fill="outline" size="large" style={{ color: '#ff3141' }} onClick={handleDeleteClick}>
           删除题目
         </Button>
       </div>
+
+      <Dialog
+        visible={deleteVisible}
+        content="确定删除这道题？可在回收站恢复。"
+        closeOnAction
+        onClose={() => setDeleteVisible(false)}
+        actions={[
+          { key: 'cancel', text: '取消', onClick: () => setDeleteVisible(false) },
+          { key: 'confirm', text: '确定', danger: true, bold: true, onClick: confirmDelete },
+        ]}
+      />
     </div>
   );
 }

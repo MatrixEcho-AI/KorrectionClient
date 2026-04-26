@@ -46,6 +46,12 @@ function TreeNode({
           { key: 'edit', text: '编辑', color: 'primary', onClick: () => onEdit(node.id, node.name) },
           { key: 'delete', text: '删除', color: 'danger', onClick: () => onDelete(node.id) },
         ]}
+        onAction={(action) => {
+          if (action.key === 'edit') onEdit(node.id, node.name);
+          if (action.key === 'delete') onDelete(node.id);
+        }}
+        closeOnAction
+        closeOnTouchOutside
       >
         <List.Item
           extra={
@@ -87,6 +93,8 @@ export default function Categories() {
   const [editVisible, setEditVisible] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
+  const [deleteVisible, setDeleteVisible] = useState(false);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
 
   useEffect(() => {
     load();
@@ -139,16 +147,22 @@ export default function Categories() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    const result = await Dialog.confirm({ content: '确定删除？子节点和题目会受影响。' });
-    if (!result) return;
+  const handleDelete = (id: number) => {
+    setDeleteId(id);
+    setDeleteVisible(true);
+  };
+
+  const confirmDelete = async () => {
+    if (deleteId === null) return;
     try {
-      await deleteCategory(id);
+      await deleteCategory(deleteId);
       await load();
       Toast.show({ content: '删除成功', icon: 'success' });
     } catch (err: any) {
       Toast.show({ content: err.message, icon: 'fail' });
     }
+    setDeleteVisible(false);
+    setDeleteId(null);
   };
 
   const tree = buildTree(categories);
@@ -217,6 +231,17 @@ export default function Categories() {
         actions={[
           { key: 'cancel', text: '取消', onClick: () => setEditVisible(false) },
           { key: 'confirm', text: '保存', primary: true, onClick: handleEditSave },
+        ]}
+      />
+
+      <Dialog
+        visible={deleteVisible}
+        content="确定删除？子节点和题目会受影响。"
+        closeOnAction
+        onClose={() => { setDeleteVisible(false); setDeleteId(null); }}
+        actions={[
+          { key: 'cancel', text: '取消', onClick: () => { setDeleteVisible(false); setDeleteId(null); } },
+          { key: 'confirm', text: '确定', danger: true, bold: true, onClick: confirmDelete },
         ]}
       />
     </div>

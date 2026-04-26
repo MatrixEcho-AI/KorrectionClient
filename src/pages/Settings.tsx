@@ -8,6 +8,7 @@ export default function Settings() {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   const [keepAwake, setKeepAwake] = useState(false);
+  const [logoutVisible, setLogoutVisible] = useState(false);
 
   useEffect(() => {
     Preferences.get({ key: 'keep_awake' }).then(({ value }) => {
@@ -22,11 +23,13 @@ export default function Settings() {
     Toast.show({ content: checked ? '已开启保持亮屏' : '已关闭保持亮屏' });
   };
 
-  const handleLogout = async () => {
-    const result = await Dialog.confirm({ content: '确定退出当前账号？' });
-    if (result) {
-      await logout();
-    }
+  const handleLogout = () => {
+    setLogoutVisible(true);
+  };
+
+  const confirmLogout = async () => {
+    await logout();
+    setLogoutVisible(false);
   };
 
   return (
@@ -58,6 +61,17 @@ export default function Settings() {
           </Button>
         </div>
       </div>
+
+      <Dialog
+        visible={logoutVisible}
+        content="确定退出当前账号？"
+        closeOnAction
+        onClose={() => setLogoutVisible(false)}
+        actions={[
+          { key: 'cancel', text: '取消', onClick: () => setLogoutVisible(false) },
+          { key: 'confirm', text: '确定', danger: true, bold: true, onClick: confirmLogout },
+        ]}
+      />
     </div>
   );
 }

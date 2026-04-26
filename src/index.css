@@ -1,16 +1,3 @@
-@import "tailwindcss";
-
-@layer base {
-  body {
-    @apply bg-gray-50 text-gray-900 antialiased;
-    -webkit-tap-highlight-color: transparent;
-  }
-}
-
-.adm-swipe-action {
-  touch-action: pan-x pan-y !important;
-}
-
-.adm-swipe-action-track {
-  touch-action: pan-x pan-y !important;
+.adm-swipe-action-actions {
+  pointer-events: auto !important;
 }
