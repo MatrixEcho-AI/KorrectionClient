@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getQuestion, deleteQuestion, updateQuestion, type Question } from '@/api/questions';
+import { getQuestion, deleteQuestion, updateQuestion, getPendingRedos, type Question, type RedoSession } from '@/api/questions';
 import { NavBar, Button, SpinLoading, Image, Tag, Toast, Dialog } from 'antd-mobile';
 
 const statusMap: Record<string, string> = {
@@ -23,6 +23,8 @@ export default function QuestionDetail() {
   const [q, setQ] = useState<Question | null>(null);
   const [detail, setDetail] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [pendingRedos, setPendingRedos] = useState<RedoSession[]>([]);
+  const [expandedOcr, setExpandedOcr] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     load();
@@ -34,9 +36,21 @@ export default function QuestionDetail() {
       const res = await getQuestion(Number(id));
       setQ(res.data);
       setDetail(res.data);
+      if (res.data.status === 'redo') {
+        try {
+          const redoRes = await getPendingRedos(Number(id));
+          setPendingRedos(redoRes.data);
+        } catch {
+          setPendingRedos([]);
+        }
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const toggleOcr = (imgId: number) => {
+    setExpandedOcr((prev) => ({ ...prev, [imgId]: !prev[imgId] }));
   };
 
   if (loading) {
@@ -98,8 +112,30 @@ export default function QuestionDetail() {
             <div style={{ fontSize: 12, fontWeight: 500, color: '#666', marginBottom: 8 }}>{typeLabel[img.image_type]}</div>
             <Image src={img.image_url} style={{ width: '100%', maxHeight: 192, borderRadius: 4 }} fit="contain" />
             {img.ocr_text && (
-              <div style={{ marginTop: 8, padding: 8, background: '#f5f5f5', borderRadius: 4, fontSize: 12, color: '#666', whiteSpace: 'pre-wrap' }}>
-                {img.ocr_text}
+              <div style={{ marginTop: 8 }}>
+                {!expandedOcr[img.id] ? (
+                  <Button
+                    size="small"
+                    fill="outline"
+                    onClick={() => toggleOcr(img.id)}
+                  >
+                    展开 OCR 识别结果
+                  </Button>
+                ) : (
+                  <div>
+                    <div style={{ padding: 8, background: '#f5f5f5', borderRadius: 4, fontSize: 12, color: '#666', whiteSpace: 'pre-wrap' }}>
+                      {img.ocr_text}
+                    </div>
+                    <Button
+                      size="small"
+                      fill="outline"
+                      style={{ marginTop: 8 }}
+                      onClick={() => toggleOcr(img.id)}
+                    >
+                      收起 OCR 识别结果
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -117,6 +153,31 @@ export default function QuestionDetail() {
             {detail.tags.map((t: any) => (
               <Tag key={t.id} color="primary" fill="outline">{t.name}</Tag>
             ))}
+          </div>
+        )}
+
+        {q.status === 'redo' && pendingRedos.length > 0 && (
+          <div style={{ marginBottom: 16, borderRadius: 8, border: '1px solid #eee', padding: 12, background: '#fff' }}>
+            <div style={{ fontSize: 12, fontWeight: 500, color: '#666', marginBottom: 8 }}>待做重做题</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {pendingRedos.map((session) => (
+                <div
+                  key={session.id}
+                  onClick={() => navigate(`/questions/${q.id}/redo?sessionId=${session.id}`)}
+                  style={{
+                    padding: 10,
+                    borderRadius: 6,
+                    background: '#f5f5f5',
+                    fontSize: 13,
+                    color: '#333',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <span style={{ color: '#1677ff', fontWeight: 500 }}>#{session.id}：</span>
+                  {session.question.question}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

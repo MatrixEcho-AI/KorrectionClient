@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getQuestions, submitReview } from '@/api/questions';
-import { NavBar, Button, SpinLoading, Image, Tag, Toast, Dialog } from 'antd-mobile';
+import { NavBar, Button, SpinLoading, Image, Tag, Toast } from 'antd-mobile';
 
 const typeLabel: Record<string, string> = {
   original_question: '原题',
@@ -25,6 +25,7 @@ export default function BatchReview() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [finished, setFinished] = useState(false);
 
   useEffect(() => {
     loadQuestions();
@@ -44,7 +45,7 @@ export default function BatchReview() {
   const current = questions[currentIndex];
 
   const handleReview = async (action: 'understood' | 'not_understood') => {
-    if (!current) return;
+    if (!current || finished) return;
     setLoading(true);
     try {
       await submitReview(current.id, action);
@@ -52,8 +53,7 @@ export default function BatchReview() {
       if (currentIndex < questions.length - 1) {
         setCurrentIndex((prev) => prev + 1);
       } else {
-        await Dialog.alert({ content: '所有题目已复盘完成' });
-        navigate('/');
+        setFinished(true);
       }
     } catch (err: any) {
       Toast.show({ content: err.message || '提交失败', icon: 'fail' });
@@ -75,6 +75,18 @@ export default function BatchReview() {
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ color: '#999' }}>暂无待复盘的题目</div>
         <Button style={{ marginTop: 16 }} onClick={() => navigate('/')}>返回首页</Button>
+      </div>
+    );
+  }
+
+  if (finished) {
+    return (
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: '#333', marginBottom: 8 }}>复盘完成</div>
+        <div style={{ fontSize: 14, color: '#666', marginBottom: 24 }}>所有待复盘的题目已处理完毕</div>
+        <Button block color="primary" size="large" onClick={() => navigate('/')}>
+          返回首页
+        </Button>
       </div>
     );
   }

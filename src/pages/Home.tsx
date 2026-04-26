@@ -6,7 +6,6 @@ import { useSubjectStore } from '@/stores/subjectStore';
 import {
   NavBar,
   Tabs,
-  List,
   Button,
   Empty,
   Tag,
@@ -90,13 +89,7 @@ export default function Home() {
     }
   };
 
-  const rightActions = [
-    {
-      key: 'delete',
-      text: '删除',
-      color: 'danger' as const,
-    },
-  ];
+
 
   const tabItems = [
     { key: '', title: '全部' },
@@ -149,16 +142,25 @@ export default function Home() {
           <Empty description="暂无错题" />
         )}
 
-        <List>
+        <div>
           {questions.map((q) => (
             <SwipeAction
               key={q.id}
-              rightActions={rightActions}
+              rightActions={[
+                {
+                  key: 'delete',
+                  text: '删除',
+                  color: 'danger' as const,
+                  onClick: () => handleDelete(q.id),
+                },
+              ]}
               onAction={(action) => {
                 if (action.key === 'delete') handleDelete(q.id);
               }}
+              closeOnAction
+              closeOnTouchOutside
             >
-              <div style={{ background: '#fff', borderBottom: '1px solid #eee' }}>
+              <div style={{ background: '#fff', borderBottom: '1px solid #eee', touchAction: 'pan-x pan-y' }}>
                 <div
                   onClick={() => navigate(`/questions/${q.id}`)}
                   style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', gap: 12 }}
@@ -215,7 +217,7 @@ export default function Home() {
               </div>
             </SwipeAction>
           ))}
-        </List>
+        </div>
 
         {questions.length > 0 && questions.length < total && !loading && (
           <div style={{ textAlign: 'center', padding: 16 }}>
