@@ -60,16 +60,23 @@ export default function QuestionNew() {
 
   const takePhoto = async (type: string) => {
     try {
+      console.log('[PHOTO] START takePhoto', { type });
       const photo = await Camera.getPhoto({
         quality: 90,
         allowEditing: false,
         resultType: CameraResultType.Uri,
         source: CameraSource.Prompt,
       });
-      if (!photo.webPath) return;
+      console.log('[PHOTO] Camera result', photo);
+      if (!photo.webPath) {
+        console.log('[PHOTO] No webPath, abort');
+        return;
+      }
 
       const blob = await fetch(photo.webPath).then((r) => r.blob());
+      console.log('[PHOTO] Blob size', blob.size);
       const compressed = await compressImage(new File([blob], 'photo.jpg', { type: 'image/jpeg' }));
+      console.log('[PHOTO] Compressed size', compressed.size);
 
       if (!questionIdRef.current) {
         if (!selectedCategoryId) {
@@ -78,17 +85,24 @@ export default function QuestionNew() {
         }
         const q = await createQuestion(selectedCategoryId, currentSubjectId || undefined);
         questionIdRef.current = q.data.id;
+        console.log('[PHOTO] Question created', q.data.id);
       }
 
       setUploading(true);
+      console.log('[PHOTO] Fetching STS...');
       const sts = await getStsToken();
+      console.log('[PHOTO] STS received', sts);
       const key = `questions/user-${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+      console.log('[PHOTO] Uploading to OSS...', key);
       const url = await uploadToOss(compressed, sts.data, key);
+      console.log('[PHOTO] OSS upload success', url);
       await addImage(questionIdRef.current, { image_url: url, image_type: type });
+      console.log('[PHOTO] Image record added');
       setImages((prev) => [...prev, { url, type, local: photo.webPath! }]);
       triggerOcr(questionIdRef.current).catch(console.error);
       Toast.show({ content: '上传成功', icon: 'success' });
     } catch (err: any) {
+      console.error('[PHOTO] ERROR:', err);
       Toast.show({ content: err.message || '拍照失败', icon: 'fail' });
     } finally {
       setUploading(false);

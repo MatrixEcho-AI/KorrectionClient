@@ -20,8 +20,8 @@ import {
 import { AddOutline, DeleteOutline, DownOutline } from 'antd-mobile-icons';
 
 const statusMap: Record<string, string> = {
-  photo: '拍照',
-  summary: '总结',
+  photo: '总结',
+  summary: '复盘',
   review: '复盘',
   redo: '重做',
   completed: '完成',
@@ -29,7 +29,7 @@ const statusMap: Record<string, string> = {
 
 const statusColors: Record<string, string> = {
   photo: '#999',
-  summary: '#1677ff',
+  summary: '#ff8f1f',
   review: '#ff8f1f',
   redo: '#873bf4',
   completed: '#00b578',
@@ -101,9 +101,8 @@ export default function Home() {
 
   const tabItems = [
     { key: '', title: '全部' },
-    { key: 'photo', title: '拍照' },
-    { key: 'summary', title: '总结' },
-    { key: 'review', title: '复盘' },
+    { key: 'photo', title: '总结' },
+    { key: 'summary,review', title: '复盘' },
     { key: 'redo', title: '重做' },
     { key: 'completed', title: '完成' },
   ];
