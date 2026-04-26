@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { Preferences } from '@capacitor/preferences';
 import { NavBar, List, Switch, Toast, Dialog, Button } from 'antd-mobile';
+import { enableKeepAwake, disableKeepAwake } from '@/utils/keepAwake';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -19,7 +20,11 @@ export default function Settings() {
   const handleKeepAwakeChange = async (checked: boolean) => {
     setKeepAwake(checked);
     await Preferences.set({ key: 'keep_awake', value: String(checked) });
-    // TODO: integrate @capacitor-community/keep-awake to actually control screen
+    if (checked) {
+      await enableKeepAwake();
+    } else {
+      await disableKeepAwake();
+    }
     Toast.show({ content: checked ? '已开启保持亮屏' : '已关闭保持亮屏' });
   };
 
@@ -46,6 +51,12 @@ export default function Settings() {
             extra={<Switch checked={keepAwake} onChange={handleKeepAwakeChange} />}
           >
             保持亮屏
+          </List.Item>
+        </List>
+
+        <List header="导出管理">
+          <List.Item arrow onClick={() => navigate('/pdf-history')}>
+            历史PDF
           </List.Item>
         </List>
 

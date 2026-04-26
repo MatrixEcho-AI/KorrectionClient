@@ -5,7 +5,7 @@ import { createQuestion, uploadImage, triggerOcr } from '@/api/questions';
 import { useCategoryStore } from '@/stores/categoryStore';
 import { useSubjectStore } from '@/stores/subjectStore';
 import { enhanceDocument } from '@/utils/image';
-import { NavBar, Button, Cascader, Toast, Image, Card, Empty } from 'antd-mobile';
+import { NavBar, Button, Cascader, Toast, Image, Card, Empty, Input } from 'antd-mobile';
 import { DeleteOutline } from 'antd-mobile-icons';
 import Cropper from 'cropperjs';
 
@@ -41,7 +41,7 @@ export default function QuestionNew() {
   const { categories, fetch: fetchCategories } = useCategoryStore();
   const { currentSubjectId } = useSubjectStore();
   const [categoryIdPath, setCategoryIdPath] = useState<string[]>([]);
-  const [images, setImages] = useState<{ type: string; file: File; preview: string }[]>([]);
+  const [images, setImages] = useState<{ type: string; file: File; preview: string; name?: string }[]>([]);
   const [cascaderVisible, setCascaderVisible] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -147,6 +147,16 @@ export default function QuestionNew() {
     });
   };
 
+  const handleRenameImage = (index: number, name: string) => {
+    setImages((prev) => {
+      const next = [...prev];
+      if (next[index]) {
+        next[index] = { ...next[index], name };
+      }
+      return next;
+    });
+  };
+
   const handleDone = async () => {
     if (images.length === 0) {
       navigate('/');
@@ -166,12 +176,13 @@ export default function QuestionNew() {
         const formData = new FormData();
         formData.append('image', img.file);
         formData.append('image_type', img.type);
+        formData.append('name', img.name || '');
         await uploadImage(questionId, formData);
       }
 
       triggerOcr(questionId).catch(console.error);
       Toast.show({ content: '上传成功', icon: 'success' });
-      navigate(`/questions/${questionId}`);
+      navigate(`/questions/${questionId}`, { replace: true });
     } catch (err: any) {
       Toast.show({ content: err.message || '上传失败', icon: 'fail' });
       setUploading(false);
@@ -186,7 +197,7 @@ export default function QuestionNew() {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <NavBar onBack={() => navigate(-1)} right={<Button size="small" color="primary" fill="outline" onClick={handleDone} loading={uploading}>完成</Button>}>
+      <NavBar onBack={() => navigate(-1)} right={<Button size="small" color="primary" fill="outline" onClick={handleDone} loading={uploading} disabled={!selectedCategoryId || images.length === 0 || uploading}>完成</Button>}>
         拍照录入
       </NavBar>
 
@@ -224,7 +235,13 @@ export default function QuestionNew() {
                   </Button>
                 }
               >
-                <Image src={img.preview} style={{ width: '100%', maxHeight: 200 }} fit="contain" />
+                <Input
+                  placeholder={`给这张${typeLabel[img.type]}命名（可选）`}
+                  value={img.name || ''}
+                  onChange={(val) => handleRenameImage(idx, val)}
+                  style={{ marginBottom: 8 }}
+                />
+                <Image src={img.preview} style={{ width: '100%' }} fit="contain" />
               </Card>
             ))}
           </>

@@ -1,6 +1,8 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
+import { Preferences } from '@capacitor/preferences';
+import { enableKeepAwake, disableKeepAwake } from '@/utils/keepAwake';
 import Login from '@/pages/Login';
 import Home from '@/pages/Home';
 import QuestionNew from '@/pages/QuestionNew';
@@ -12,6 +14,7 @@ import Categories from '@/pages/Categories';
 import Subjects from '@/pages/Subjects';
 import Settings from '@/pages/Settings';
 import ExportPage from '@/pages/ExportPage';
+import PdfHistory from '@/pages/PdfHistory';
 import Trash from '@/pages/Trash';
 import BatchReview from '@/pages/BatchReview';
 
@@ -20,6 +23,13 @@ function App() {
 
   useEffect(() => {
     init();
+    Preferences.get({ key: 'keep_awake' }).then(({ value }) => {
+      if (value === 'true') {
+        enableKeepAwake();
+      } else {
+        disableKeepAwake();
+      }
+    });
   }, []);
 
   if (isLoading) {
@@ -44,6 +54,7 @@ function App() {
         <Route path="/categories" element={token ? <Categories /> : <Navigate to="/login" />} />
         <Route path="/subjects" element={token ? <Subjects /> : <Navigate to="/login" />} />
         <Route path="/export" element={token ? <ExportPage /> : <Navigate to="/login" />} />
+        <Route path="/pdf-history" element={token ? <PdfHistory /> : <Navigate to="/login" />} />
         <Route path="/trash" element={token ? <Trash /> : <Navigate to="/login" />} />
         <Route path="/settings" element={token ? <Settings /> : <Navigate to="/login" />} />
       </Routes>

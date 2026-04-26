@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getQuestions, deleteQuestion, type Question } from '@/api/questions';
+import { getQuestions, deleteQuestion, getQuestionStats, type Question } from '@/api/questions';
 import { useCategoryStore } from '@/stores/categoryStore';
 import { useSubjectStore } from '@/stores/subjectStore';
 import {
@@ -47,6 +47,16 @@ export default function Home() {
   const [deleteVisible, setDeleteVisible] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const pageSize = 20;
+  const [stats, setStats] = useState<Record<string, number>>({});
+
+  const loadStats = async () => {
+    try {
+      const res = await getQuestionStats({ subject_id: currentSubjectId || undefined });
+      setStats(res.data);
+    } catch {
+      setStats({});
+    }
+  };
 
   useEffect(() => {
     initSubject().then(() => {
@@ -60,6 +70,7 @@ export default function Home() {
 
   useEffect(() => {
     loadQuestions(1);
+    loadStats();
   }, [statusFilter, currentSubjectId]);
 
   const loadQuestions = async (p: number) => {
@@ -92,6 +103,7 @@ export default function Home() {
     await deleteQuestion(deleteId);
     Toast.show({ content: '已删除', icon: 'success' });
     loadQuestions(1);
+    loadStats();
     setDeleteVisible(false);
     setDeleteId(null);
   };
@@ -100,9 +112,9 @@ export default function Home() {
 
   const tabItems = [
     { key: '', title: '全部' },
-    { key: 'photo', title: '总结' },
-    { key: 'summary,review', title: '复盘' },
-    { key: 'redo', title: '重做' },
+    { key: 'photo', title: '总结', count: stats.photo || 0 },
+    { key: 'summary,review', title: '复盘', count: (stats.summary || 0) + (stats.review || 0) },
+    { key: 'redo', title: '重做', count: stats.redo || 0 },
     { key: 'completed', title: '完成' },
   ];
 
@@ -132,7 +144,19 @@ export default function Home() {
 
       <Tabs activeKey={statusFilter} onChange={(k) => setStatusFilter(k)}>
         {tabItems.map((item) => (
-          <Tabs.Tab title={item.title} key={item.key} />
+          <Tabs.Tab
+            title={
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                {item.title}
+                {item.count !== undefined && item.count > 0 && (
+                  <span style={{ background: '#ff411c', color: '#fff', fontSize: 10, padding: '0 5px', borderRadius: 8, lineHeight: '14px', minWidth: 14, textAlign: 'center' }}>
+                    {item.count}
+                  </span>
+                )}
+              </div>
+            }
+            key={item.key}
+          />
         ))}
       </Tabs>
 

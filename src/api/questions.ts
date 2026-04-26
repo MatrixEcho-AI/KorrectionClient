@@ -29,6 +29,9 @@ export interface Question {
   pending_redos?: RedoSession[];
 }
 
+export const getQuestionStats = (params?: { subject_id?: number }) =>
+  client.get('/api/questions/stats', { params }) as Promise<{ code: number; data: Record<string, number> }>;
+
 export const getQuestions = (params?: {
   status?: string;
   category_id?: number;
@@ -104,3 +107,9 @@ export const getRecommendations = (questionId: number) =>
     code: number;
     data: { category_id: number; tag_ids: number[] };
   }>;
+
+export const rollbackQuestion = (id: number, target_status: string) =>
+  client.post(`/api/questions/${id}/rollback`, { target_status }) as Promise<{ code: number; data: null }>;
+
+export const updateImageOcr = (questionId: number, imageId: number, ocr_text: string) =>
+  client.put(`/api/questions/${questionId}/images/${imageId}/ocr`, { ocr_text }) as Promise<{ code: number; data: null }>;
