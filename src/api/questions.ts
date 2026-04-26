@@ -19,7 +19,9 @@ export interface Question {
   category_id: number;
   subject_id: number;
   status: 'photo' | 'summary' | 'review' | 'redo' | 'completed' | 'deleted';
+  name?: string;
   reason_text?: string;
+  reason_status?: string;
   review_count: number;
   last_review_at?: number;
   created_at: number;
@@ -48,8 +50,8 @@ export const getQuestions = (params?: {
 export const getQuestion = (id: number) =>
   client.get(`/api/questions/${id}`) as Promise<{ code: number; data: Question & { images: QuestionImage[]; tags: any[]; reviews: any[]; redo: any } }>;
 
-export const createQuestion = (category_id: number, subject_id?: number) =>
-  client.post('/api/questions', { category_id, subject_id }) as Promise<{ code: number; data: { id: number } }>;
+export const createQuestion = (category_id: number, subject_id?: number, name?: string) =>
+  client.post('/api/questions', { category_id, subject_id, name }) as Promise<{ code: number; data: { id: number } }>;
 
 export const updateQuestion = (id: number, data: Partial<Question>) =>
   client.put(`/api/questions/${id}`, data) as Promise<{ code: number; data: null }>;
@@ -62,6 +64,9 @@ export const uploadImage = (questionId: number, formData: FormData) =>
 
 export const triggerOcr = (questionId: number) =>
   client.post(`/api/questions/${questionId}/ocr`) as Promise<{ code: number; data: null }>;
+
+export const triggerAutoSummary = (questionId: number) =>
+  client.post(`/api/questions/${questionId}/auto-summary`) as Promise<{ code: number; data: null }>;
 
 export const submitSummary = (questionId: number, data: { reason_text: string; category_id?: number; tag_ids: number[] }) =>
   client.post(`/api/questions/${questionId}/summary`, data) as Promise<{ code: number; data: null }>;

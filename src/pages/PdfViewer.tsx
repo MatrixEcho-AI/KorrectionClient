@@ -4,10 +4,12 @@ import { NavBar, Toast, SpinLoading } from 'antd-mobile';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import * as pdfjsLib from 'pdfjs-dist';
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import pdfjsWorkerSource from 'pdfjs-dist/build/pdf.worker.min.mjs?raw';
 import { getPdfUri, type PdfRecord } from '@/utils/pdfExport';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+const workerBlob = new Blob([pdfjsWorkerSource], { type: 'application/javascript' });
+const workerUrl = URL.createObjectURL(workerBlob);
+pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
 export default function PdfViewer() {
   const navigate = useNavigate();

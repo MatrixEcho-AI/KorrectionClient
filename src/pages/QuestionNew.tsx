@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
-import { createQuestion, uploadImage, triggerOcr } from '@/api/questions';
+import { createQuestion, uploadImage, triggerOcr, triggerAutoSummary } from '@/api/questions';
 import { useCategoryStore } from '@/stores/categoryStore';
 import { useSubjectStore } from '@/stores/subjectStore';
 import { enhanceDocument } from '@/utils/image';
@@ -41,7 +41,8 @@ export default function QuestionNew() {
   const { categories, fetch: fetchCategories } = useCategoryStore();
   const { currentSubjectId } = useSubjectStore();
   const [categoryIdPath, setCategoryIdPath] = useState<string[]>([]);
-  const [images, setImages] = useState<{ type: string; file: File; preview: string; name?: string }[]>([]);
+  const [questionName, setQuestionName] = useState('');
+  const [images, setImages] = useState<{ type: string; file: File; preview: string }[]>([]);
   const [cascaderVisible, setCascaderVisible] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -147,16 +148,6 @@ export default function QuestionNew() {
     });
   };
 
-  const handleRenameImage = (index: number, name: string) => {
-    setImages((prev) => {
-      const next = [...prev];
-      if (next[index]) {
-        next[index] = { ...next[index], name };
-      }
-      return next;
-    });
-  };
-
   const handleDone = async () => {
     if (images.length === 0) {
       navigate('/');
@@ -169,18 +160,19 @@ export default function QuestionNew() {
 
     setUploading(true);
     try {
-      const q = await createQuestion(selectedCategoryId, currentSubjectId || undefined);
+      const q = await createQuestion(selectedCategoryId, currentSubjectId || undefined, questionName.trim() || undefined);
       const questionId = q.data.id;
 
       for (const img of images) {
         const formData = new FormData();
         formData.append('image', img.file);
         formData.append('image_type', img.type);
-        formData.append('name', img.name || '');
+        formData.append('name', '');
         await uploadImage(questionId, formData);
       }
 
       triggerOcr(questionId).catch(console.error);
+      triggerAutoSummary(questionId).catch(console.error);
       Toast.show({ content: '上传成功', icon: 'success' });
       navigate(`/questions/${questionId}`, { replace: true });
     } catch (err: any) {
@@ -224,6 +216,13 @@ export default function QuestionNew() {
               onConfirm={(v) => setCategoryIdPath(v as string[])}
             />
 
+            <Input
+              placeholder="给这道题起个名字（可选）"
+              value={questionName}
+              onChange={(val) => setQuestionName(val)}
+              style={{ marginBottom: 16, marginTop: 12 }}
+            />
+
             {images.map((img, idx) => (
               <Card
                 key={idx}
@@ -235,12 +234,6 @@ export default function QuestionNew() {
                   </Button>
                 }
               >
-                <Input
-                  placeholder={`给这张${typeLabel[img.type]}命名（可选）`}
-                  value={img.name || ''}
-                  onChange={(val) => handleRenameImage(idx, val)}
-                  style={{ marginBottom: 8 }}
-                />
                 <Image src={img.preview} style={{ width: '100%' }} fit="contain" />
               </Card>
             ))}

@@ -206,7 +206,7 @@ export default function Home() {
                     <div style={{ width: 56, height: 56, borderRadius: 8, background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: 12 }}>无图</div>
                   )}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14 }}>题目 #{q.id}</div>
+                    <div style={{ fontSize: 14 }}>{q.name || `题目 #${q.id}`}</div>
                     <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
                       <Tag color={statusColors[q.status]} fill="outline" style={{ fontSize: 11 }}>
                         {statusMap[q.status]}
@@ -216,6 +216,12 @@ export default function Home() {
                   </div>
                 </div>
 
+                {q.reason_status === 'generating' && (
+                  <div style={{ padding: '0 16px 8px 16px', fontSize: 12, color: '#999', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <SpinLoading color="primary" style={{ width: 14, height: 14 }} />
+                    错题原因总结中...
+                  </div>
+                )}
                 {q.status === 'redo' && (
                   <div style={{ padding: '0 16px 12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {q.pending_redos && q.pending_redos.length > 0 ? (

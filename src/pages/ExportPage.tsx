@@ -6,7 +6,7 @@ import { getCategories, type Category } from '@/api/categories';
 import { getTags, type Tag } from '@/api/tags';
 import { useSubjectStore } from '@/stores/subjectStore';
 import { generateAndSavePdf, type PdfRecord, type PageSize } from '@/utils/pdfExport';
-import { NavBar, List, Button, Checkbox, Toast, SpinLoading, Picker } from 'antd-mobile';
+import { NavBar, List, Button, Checkbox, Toast, SpinLoading, Picker, Cascader } from 'antd-mobile';
 
 const optionLabels: Record<string, string> = {
   originalImage: '原题图片',
@@ -22,12 +22,38 @@ const optionLabels: Record<string, string> = {
 
 const statusOptions = [
   { label: '全部状态', value: '' },
-  { label: '拍照', value: 'photo' },
   { label: '总结', value: 'summary' },
   { label: '复习', value: 'review' },
   { label: '重做', value: 'redo' },
   { label: '已完成', value: 'completed' },
 ];
+
+function buildCascaderOptions(categories: { id: number; parent_id: number; name: string }[]) {
+  const map = new Map<number, { label: string; value: string; children: any[] }>();
+  categories.forEach((c) => map.set(c.id, { label: c.name, value: String(c.id), children: [] }));
+  const roots: any[] = [];
+  categories.forEach((c) => {
+    if (c.parent_id === 0) {
+      roots.push(map.get(c.id)!);
+    } else {
+      const parent = map.get(c.parent_id);
+      if (parent) {
+        parent.children.push(map.get(c.id)!);
+      }
+    }
+  });
+  const clean = (nodes: any[]) => {
+    nodes.forEach((n) => {
+      if (n.children.length === 0) {
+        delete n.children;
+      } else {
+        clean(n.children);
+      }
+    });
+  };
+  clean(roots);
+  return roots;
+}
 
 export default function ExportPage() {
   const navigate = useNavigate();
@@ -61,12 +87,12 @@ export default function ExportPage() {
   const generatingRef = useRef(false);
 
   // filters
-  const [filterCategoryId, setFilterCategoryId] = useState<number | undefined>();
+  const [categoryIdPath, setCategoryIdPath] = useState<string[]>([]);
   const [filterTagId, setFilterTagId] = useState<number | undefined>();
   const [filterStatus, setFilterStatus] = useState<string | undefined>();
   const [categories, setCategories] = useState<Category[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
-  const [catPickerVisible, setCatPickerVisible] = useState(false);
+  const [cascaderVisible, setCascaderVisible] = useState(false);
   const [tagPickerVisible, setTagPickerVisible] = useState(false);
   const [statusPickerVisible, setStatusPickerVisible] = useState(false);
 
@@ -82,7 +108,7 @@ export default function ExportPage() {
       }).catch(() => {});
     }
     loadQuestions();
-  }, [currentSubjectId, filterCategoryId, filterTagId, filterStatus]);
+  }, [currentSubjectId, categoryIdPath, filterTagId, filterStatus]);
 
   useEffect(() => {
     if (!pendingExport) return;
@@ -121,11 +147,21 @@ export default function ExportPage() {
     try {
       const params: any = { pageSize: 500 };
       if (currentSubjectId) params.subject_id = currentSubjectId;
+      const filterCategoryId = categoryIdPath.length > 0 ? Number(categoryIdPath[categoryIdPath.length - 1]) : undefined;
       if (filterCategoryId) params.category_id = filterCategoryId;
       if (filterTagId) params.tag_id = filterTagId;
-      if (filterStatus) params.status = filterStatus;
+      if (filterStatus === 'summary') {
+        // summary status now includes old "photo" status
+        params.status = '';
+      } else if (filterStatus) {
+        params.status = filterStatus;
+      }
       const res = await getQuestions(params);
-      setQuestions(res.data.list);
+      let list = res.data.list;
+      if (filterStatus === 'summary') {
+        list = list.filter((q: Question) => q.status === 'summary' || q.status === 'photo');
+      }
+      setQuestions(list);
     } finally {
       setListLoading(false);
     }
@@ -201,17 +237,16 @@ export default function ExportPage() {
   const sortOrderLabel = sortOrderOptions.find((o) => o.value === sortOrder)?.label || '降序';
   const pageSizeLabel = pageSizeOptions.find((o) => o.value === pageSize)?.label || 'A4';
 
-  const categoryOptions = [
-    { label: '全部章节', value: 0 },
-    ...categories.map((c) => ({ label: c.name, value: c.id })),
-  ];
+  const cascaderOptions = buildCascaderOptions(categories);
 
   const tagOptions = [
     { label: '全部标签', value: 0 },
     ...tags.map((t) => ({ label: t.name, value: t.id })),
   ];
 
-  const catLabel = categoryOptions.find((o) => o.value === (filterCategoryId || 0))?.label || '全部章节';
+  const catLabel = categoryIdPath.length > 0
+    ? categoryIdPath.map((id) => categories.find((c) => String(c.id) === id)?.name).filter(Boolean).join(' / ')
+    : '全部章节';
   const tagLabel = tagOptions.find((o) => o.value === (filterTagId || 0))?.label || '全部标签';
   const statusLabel = statusOptions.find((o) => o.value === (filterStatus || ''))?.label || '全部状态';
 
@@ -249,7 +284,7 @@ export default function ExportPage() {
 
           return (
             <div key={q.id} style={{ marginBottom: 24, borderBottom: '1px solid #eee', paddingBottom: 16 }}>
-              <div style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10, color: '#111' }}>题目 {idx + 1}</div>
+              <div style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10, color: '#111' }}>{q.name || `题目 ${idx + 1}`}</div>
               {include.originalImage && origImages.map((img: any) => (
                 <div key={img.id}>
                   <img src={img.image_url} style={{ maxWidth: '100%', maxHeight: maxImgHeightPx, objectFit: 'contain', display: 'block', margin: '8px 0', border: '1px solid #ddd', borderRadius: 4 }} alt="" />
@@ -300,7 +335,7 @@ export default function ExportPage() {
         <List header="筛选条件">
           <List.Item
             extra={catLabel}
-            onClick={() => setCatPickerVisible(true)}
+            onClick={() => setCascaderVisible(true)}
             arrow
           >
             章节
@@ -321,17 +356,12 @@ export default function ExportPage() {
           </List.Item>
         </List>
 
-        <Picker
-          columns={[categoryOptions]}
-          visible={catPickerVisible}
-          onClose={() => setCatPickerVisible(false)}
-          value={[filterCategoryId || 0]}
-          onConfirm={(v) => {
-            const val = v[0] as number;
-            setFilterCategoryId(val || undefined);
-            setCatPickerVisible(false);
-          }}
-          title="选择章节"
+        <Cascader
+          options={cascaderOptions}
+          visible={cascaderVisible}
+          onClose={() => setCascaderVisible(false)}
+          value={categoryIdPath}
+          onConfirm={(v) => setCategoryIdPath(v as string[])}
         />
         <Picker
           columns={[tagOptions]}
@@ -414,10 +444,10 @@ export default function ExportPage() {
               }
             >
               <div>
-                <span style={{ fontSize: 14 }}>题目 #{q.id}</span>
+                <span style={{ fontSize: 14 }}>{q.name || `题目 #${q.id}`}</span>
                 {q.tags && q.tags.length > 0 && (
                   <span style={{ marginLeft: 6, fontSize: 11, color: '#1677ff', background: '#e6f4ff', padding: '2px 6px', borderRadius: 4 }}>
-                    {q.tags.slice(0, 2).join(' ')}{q.tags.length > 2 ? '...' : ''}
+                    {q.tags.map((t: any) => typeof t === 'string' ? t : t.name).slice(0, 2).join(' ')}{q.tags.length > 2 ? '...' : ''}
                   </span>
                 )}
                 {q.review_count > 0 && (

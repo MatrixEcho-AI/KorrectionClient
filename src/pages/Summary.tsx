@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getQuestion, submitSummary, getRecommendations } from '@/api/questions';
+import { getQuestion, submitSummary } from '@/api/questions';
 import { getTags, createTag, type Tag } from '@/api/tags';
 import { useCategoryStore } from '@/stores/categoryStore';
 import { useSubjectStore } from '@/stores/subjectStore';
@@ -58,7 +58,6 @@ export default function Summary() {
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const [newTagName, setNewTagName] = useState('');
   const [loading, setLoading] = useState(false);
-  const [recommendLoading, setRecommendLoading] = useState(false);
   const [cascaderVisible, setCascaderVisible] = useState(false);
 
   useEffect(() => {
@@ -106,23 +105,6 @@ export default function Summary() {
     }
   };
 
-  const handleRecommend = async () => {
-    setRecommendLoading(true);
-    try {
-      const res = await getRecommendations(Number(id));
-      const { category_id, tag_ids } = res.data;
-      if (category_id) setCategoryIdPath(findCategoryPath(categories, category_id));
-      if (tag_ids.length) {
-        setSelectedTagIds((prev) => Array.from(new Set([...prev, ...tag_ids])));
-      }
-      Toast.show({ content: 'AI 推荐已应用', icon: 'success' });
-    } catch (err: any) {
-      Toast.show({ content: 'AI 推荐失败: ' + err.message, icon: 'fail' });
-    } finally {
-      setRecommendLoading(false);
-    }
-  };
-
   const handleSubmit = async () => {
     if (!reason.trim()) {
       Toast.show({ content: '请填写错题原因', icon: 'fail' });
@@ -156,16 +138,7 @@ export default function Summary() {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <NavBar
-        onBack={() => navigate(-1)}
-        right={
-          <Button size="mini" color="primary" fill="outline" loading={recommendLoading} onClick={handleRecommend}>
-            AI推荐
-          </Button>
-        }
-      >
-        总结错题
-      </NavBar>
+      <NavBar onBack={() => navigate(-1)}>总结错题</NavBar>
 
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: 16 }}>
         <div style={{ marginBottom: 16 }}>
@@ -220,7 +193,7 @@ export default function Summary() {
       </div>
 
       <div style={{ padding: 12, borderTop: '1px solid #eee' }}>
-        <Button block color="primary" size="large" loading={loading} onClick={handleSubmit}>
+        <Button block color="primary" size="large" loading={loading} disabled={selectedTagIds.length === 0} onClick={handleSubmit}>
           {loading ? '保存中...' : '完成总结'}
         </Button>
       </div>

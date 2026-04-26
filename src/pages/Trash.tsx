@@ -76,7 +76,7 @@ export default function Trash() {
                 </div>
               }
             >
-              <span style={{ fontSize: 14 }}>题目 #{q.id}</span>
+              <span style={{ fontSize: 14 }}>{q.name || `题目 #${q.id}`}</span>
             </List.Item>
           ))}
         </List>
