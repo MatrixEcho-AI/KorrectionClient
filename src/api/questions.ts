@@ -48,6 +48,9 @@ export const updateQuestion = (id: number, data: Partial<Question>) =>
 export const addImage = (questionId: number, data: { image_url: string; image_type: string; sort_order?: number }) =>
   client.post(`/api/questions/${questionId}/images`, data) as Promise<{ code: number; data: { id: number } }>;
 
+export const uploadImage = (questionId: number, formData: FormData) =>
+  client.post(`/api/questions/${questionId}/images/upload`, formData) as Promise<{ code: number; data: { id: number; image_url: string } }>;
+
 export const triggerOcr = (questionId: number) =>
   client.post(`/api/questions/${questionId}/ocr`) as Promise<{ code: number; data: null }>;
 

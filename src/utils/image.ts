@@ -40,27 +40,20 @@ export async function compressImage(file: File, maxLongEdge = 1920, maxSizeMB = 
 
 export async function uploadToOss(
   file: File | Blob,
-  sts: { accessKeyId: string; accessKeySecret: string; securityToken: string; bucket: string; region: string; endpoint: string },
+  info: { url: string; host: string },
   key: string
 ): Promise<string> {
-  console.log('[UPLOAD] START uploadToOss', { key, bucket: sts.bucket, region: sts.region, endpoint: sts.endpoint });
-  try {
-    const OSS = await import('ali-oss');
-    console.log('[UPLOAD] OSS SDK imported');
-    const client = new OSS.default({
-      region: sts.region,
-      accessKeyId: sts.accessKeyId,
-      accessKeySecret: sts.accessKeySecret,
-      stsToken: sts.securityToken,
-      bucket: sts.bucket,
-      endpoint: sts.endpoint,
-    });
-    console.log('[UPLOAD] OSS client created');
-    const result = await client.put(key, file);
-    console.log('[UPLOAD] put success', result);
-    return result.url;
-  } catch (err: any) {
-    console.error('[UPLOAD] ERROR:', err);
-    throw err;
+  console.log('[UPLOAD] START fetch PUT', { key, host: info.host });
+  const resp = await fetch(info.url, {
+    method: 'PUT',
+    body: file,
+    headers: { 'Content-Type': 'image/jpeg' },
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`OSS PUT failed: ${resp.status} ${text}`);
   }
+  const url = `https://${info.host}/${key}`;
+  console.log('[UPLOAD] success', url);
+  return url;
 }

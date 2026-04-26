@@ -1,11 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
-import { createQuestion, addImage, triggerOcr } from '@/api/questions';
-import { getStsToken } from '@/api/oss';
+import { createQuestion, uploadImage, triggerOcr } from '@/api/questions';
 import { useCategoryStore } from '@/stores/categoryStore';
 import { useSubjectStore } from '@/stores/subjectStore';
-import { compressImage, uploadToOss } from '@/utils/image';
+import { compressImage } from '@/utils/image';
 import { NavBar, Button, Cascader, Toast, Image, Space, Card, Empty } from 'antd-mobile';
 
 function buildCascaderOptions(categories: { id: number; parent_id: number; name: string }[]) {
@@ -77,6 +76,7 @@ export default function QuestionNew() {
       console.log('[PHOTO] Blob size', blob.size);
       const compressed = await compressImage(new File([blob], 'photo.jpg', { type: 'image/jpeg' }));
       console.log('[PHOTO] Compressed size', compressed.size);
+      const uploadFile = new File([compressed], 'photo.jpg', { type: 'image/jpeg' });
 
       if (!questionIdRef.current) {
         if (!selectedCategoryId) {
@@ -89,15 +89,13 @@ export default function QuestionNew() {
       }
 
       setUploading(true);
-      console.log('[PHOTO] Fetching STS...');
-      const sts = await getStsToken();
-      console.log('[PHOTO] STS received', sts);
-      const key = `questions/user-${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
-      console.log('[PHOTO] Uploading to OSS...', key);
-      const url = await uploadToOss(compressed, sts.data, key);
-      console.log('[PHOTO] OSS upload success', url);
-      await addImage(questionIdRef.current, { image_url: url, image_type: type });
-      console.log('[PHOTO] Image record added');
+      console.log('[PHOTO] Uploading via backend...');
+      const formData = new FormData();
+      formData.append('image', uploadFile);
+      formData.append('image_type', type);
+      const uploadResult = await uploadImage(questionIdRef.current, formData);
+      const url = uploadResult.data.image_url;
+      console.log('[PHOTO] Upload success', url);
       setImages((prev) => [...prev, { url, type, local: photo.webPath! }]);
       triggerOcr(questionIdRef.current).catch(console.error);
       Toast.show({ content: '上传成功', icon: 'success' });

@@ -10,6 +10,12 @@ export const getStsToken = () =>
       expiration: string;
       region: string;
       bucket: string;
-      endpoint: string;
+      host: string;
     };
+  }>;
+
+export const getUploadUrl = (key: string) =>
+  client.get('/api/oss/upload-url', { params: { key } }) as Promise<{
+    code: number;
+    data: { url: string; host: string };
   }>;
