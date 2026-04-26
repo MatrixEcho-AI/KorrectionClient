@@ -2,6 +2,7 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Preferences } from '@capacitor/preferences';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { getProxyImageUrl } from '@/api/images';
 
 export interface PdfRecord {
   id: string;
@@ -55,10 +56,15 @@ async function preloadImages(element: HTMLElement) {
   const replacements: { img: HTMLImageElement; objectUrl: string }[] = [];
 
   for (const img of images) {
+    img.removeAttribute('crossOrigin');
+    img.removeAttribute('crossorigin');
+
     const src = img.getAttribute('src');
     if (!src || src.startsWith('blob:') || src.startsWith('data:')) continue;
+
+    const proxySrc = getProxyImageUrl(src);
     try {
-      const response = await fetch(src);
+      const response = await fetch(proxySrc);
       const blob = await response.blob();
       const objectUrl = URL.createObjectURL(blob);
       img.setAttribute('data-original-src', src);

@@ -330,9 +330,7 @@ export default function QuestionDetail() {
         {q.status === 'photo' && (
           <Button block color="primary" size="large" onClick={nextAction}>去总结</Button>
         )}
-        {q.status === 'summary' && (
-          <Button block color="primary" size="large" onClick={nextAction}>去复盘</Button>
-        )}
+
         {q.status === 'redo' && (
           <Button block color="primary" size="large" onClick={handleComplete}>标记为完成</Button>
         )}

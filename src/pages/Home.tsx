@@ -149,7 +149,7 @@ export default function Home() {
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                 {item.title}
                 {item.count !== undefined && item.count > 0 && (
-                  <span style={{ background: '#ff411c', color: '#fff', fontSize: 10, padding: '0 5px', borderRadius: 8, lineHeight: '14px', minWidth: 14, textAlign: 'center' }}>
+                  <span style={{ background: '#1677ff', color: '#fff', fontSize: 10, padding: '0 5px', borderRadius: 8, lineHeight: '14px', minWidth: 14, textAlign: 'center' }}>
                     {item.count}
                   </span>
                 )}
@@ -264,13 +264,14 @@ export default function Home() {
       </div>
 
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: 12, background: '#fff', borderTop: '1px solid #eee', zIndex: 100 }}>
-        {statusFilter === 'summary,review' ? (
+        {statusFilter === 'summary,review' && (
           <Button block color="primary" size="large" onClick={() => navigate('/batch-review')}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               <AddOutline /> 复盘
             </span>
           </Button>
-        ) : (
+        )}
+        {statusFilter !== 'summary,review' && statusFilter !== 'redo' && statusFilter !== 'completed' && (
           <Button block color="primary" size="large" onClick={() => navigate('/questions/new')}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               <AddOutline /> 拍照录入

@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getQuestions, type Question } from '@/api/questions';
 import { exportData } from '@/api/export';
+import { getProxyImageUrl } from '@/api/images';
 import { useSubjectStore } from '@/stores/subjectStore';
 import { generateAndSavePdf, type PdfRecord } from '@/utils/pdfExport';
 import { NavBar, List, Button, Checkbox, Toast, SpinLoading, Picker } from 'antd-mobile';
@@ -9,6 +10,7 @@ import { NavBar, List, Button, Checkbox, Toast, SpinLoading, Picker } from 'antd
 const optionLabels: Record<string, string> = {
   originalImage: '原题图片',
   originalOcr: 'OCR 文本',
+  wrongSolutionImage: '错解图片',
   referenceImage: '参考答案图',
   reason: '错题原因',
   tags: '标签',
@@ -25,6 +27,7 @@ export default function ExportPage() {
   const [options, setOptions] = useState({
     originalImage: true,
     originalOcr: true,
+    wrongSolutionImage: true,
     referenceImage: true,
     reason: true,
     tags: true,
@@ -40,12 +43,40 @@ export default function ExportPage() {
   const [orderPickerVisible, setOrderPickerVisible] = useState(false);
   const [printQuestions, setPrintQuestions] = useState<any[]>([]);
   const [printOptions, setPrintOptions] = useState<Record<string, boolean> | null>(null);
+  const [pendingExport, setPendingExport] = useState(false);
   const [lastRecord, setLastRecord] = useState<PdfRecord | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadQuestions();
   }, [currentSubjectId]);
+
+  useEffect(() => {
+    if (!pendingExport) return;
+    if (!printRef.current || printQuestions.length === 0 || !printOptions) return;
+
+    setPendingExport(false);
+
+    (async () => {
+      try {
+        const record = await generateAndSavePdf(
+          printRef.current!,
+          `错题导出 (${selectedIds.length}题)`,
+          selectedIds.length
+        );
+        setLastRecord(record);
+        Toast.show({ content: 'PDF已保存到本地', icon: 'success' });
+        navigate('/pdf-viewer', { state: { record } });
+      } catch (err: any) {
+        console.error('PDF生成失败:', err);
+        Toast.show({ content: 'PDF生成失败: ' + (err.message || ''), icon: 'fail' });
+      } finally {
+        setLoading(false);
+        setPrintQuestions([]);
+        setPrintOptions(null);
+      }
+    })();
+  }, [pendingExport, printQuestions, printOptions]);
 
   const loadQuestions = async () => {
     setListLoading(true);
@@ -88,27 +119,7 @@ export default function ExportPage() {
       });
       setPrintQuestions(res.data.questions);
       setPrintOptions(res.data.options);
-
-      setTimeout(async () => {
-        if (!printRef.current) {
-          setLoading(false);
-          return;
-        }
-        try {
-          const record = await generateAndSavePdf(
-            printRef.current,
-            `错题导出 (${selectedIds.length}题)`,
-            selectedIds.length
-          );
-          setLastRecord(record);
-          Toast.show({ content: 'PDF已保存到本地', icon: 'success' });
-        } catch (err: any) {
-          console.error('PDF生成失败:', err);
-          Toast.show({ content: 'PDF生成失败: ' + (err.message || ''), icon: 'fail' });
-        } finally {
-          setLoading(false);
-        }
-      }, 300);
+      setPendingExport(true);
     } catch (err: any) {
       Toast.show({ content: err.message || '导出失败', icon: 'fail' });
       setLoading(false);
@@ -135,6 +146,7 @@ export default function ExportPage() {
     const include = {
       originalImage: printOptions.originalImage !== false,
       originalOcr: printOptions.originalOcr !== false,
+      wrongSolutionImage: printOptions.wrongSolutionImage !== false,
       referenceImage: printOptions.referenceImage !== false,
       reason: printOptions.reason !== false,
       tags: printOptions.tags !== false,
@@ -157,6 +169,7 @@ export default function ExportPage() {
       >
         {printQuestions.map((q, idx) => {
           const origImages = q.images?.filter((i: any) => i.image_type === 'original_question') || [];
+          const wrongImages = q.images?.filter((i: any) => i.image_type === 'wrong_solution') || [];
           const refImages = q.images?.filter((i: any) => i.image_type === 'reference_answer') || [];
 
           return (
@@ -164,14 +177,17 @@ export default function ExportPage() {
               <div style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10, color: '#111' }}>题目 {idx + 1}</div>
               {include.originalImage && origImages.map((img: any) => (
                 <div key={img.id}>
-                  <img src={img.image_url} style={{ maxWidth: '100%', display: 'block', margin: '8px 0', border: '1px solid #ddd', borderRadius: 4 }} alt="" crossOrigin="anonymous" />
+                  <img src={getProxyImageUrl(img.image_url)} style={{ maxWidth: '100%', display: 'block', margin: '8px 0', border: '1px solid #ddd', borderRadius: 4 }} alt="" />
                   {include.originalOcr && img.ocr_text && (
                     <div style={{ background: '#f8f9fa', padding: 8, borderRadius: 4, margin: '6px 0', fontSize: 13, color: '#555', whiteSpace: 'pre-wrap' }}>{img.ocr_text}</div>
                   )}
                 </div>
               ))}
+              {include.wrongSolutionImage && wrongImages.map((img: any) => (
+                <img key={img.id} src={getProxyImageUrl(img.image_url)} style={{ maxWidth: '100%', display: 'block', margin: '8px 0', border: '1px solid #ddd', borderRadius: 4 }} alt="" />
+              ))}
               {include.referenceImage && refImages.map((img: any) => (
-                <img key={img.id} src={img.image_url} style={{ maxWidth: '100%', display: 'block', margin: '8px 0', border: '1px solid #ddd', borderRadius: 4 }} alt="" crossOrigin="anonymous" />
+                <img key={img.id} src={getProxyImageUrl(img.image_url)} style={{ maxWidth: '100%', display: 'block', margin: '8px 0', border: '1px solid #ddd', borderRadius: 4 }} alt="" />
               ))}
               {include.reason && q.reason_text && (
                 <div style={{ margin: '4px 0', fontSize: 13, color: '#444' }}><strong>错题原因:</strong> {q.reason_text}</div>

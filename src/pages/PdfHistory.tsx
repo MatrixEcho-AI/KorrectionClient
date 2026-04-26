@@ -4,7 +4,6 @@ import { getPdfRecords, deletePdfRecord, getPdfUri, type PdfRecord } from '@/uti
 import { NavBar, List, Button, Toast, Dialog, SwipeAction, Empty } from 'antd-mobile';
 import { DeleteOutline } from 'antd-mobile-icons';
 import { Share } from '@capacitor/share';
-import { Capacitor } from '@capacitor/core';
 
 export default function PdfHistory() {
   const navigate = useNavigate();
@@ -25,14 +24,8 @@ export default function PdfHistory() {
     }
   };
 
-  const handleView = async (record: PdfRecord) => {
-    try {
-      const uri = await getPdfUri(record.id);
-      const webUri = Capacitor.convertFileSrc(uri);
-      window.open(webUri, '_blank');
-    } catch (err: any) {
-      Toast.show({ content: '打开失败', icon: 'fail' });
-    }
+  const handleView = (record: PdfRecord) => {
+    navigate('/pdf-viewer', { state: { record } });
   };
 
   const handleShare = async (record: PdfRecord) => {

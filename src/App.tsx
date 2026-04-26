@@ -15,6 +15,7 @@ import Subjects from '@/pages/Subjects';
 import Settings from '@/pages/Settings';
 import ExportPage from '@/pages/ExportPage';
 import PdfHistory from '@/pages/PdfHistory';
+import PdfViewer from '@/pages/PdfViewer';
 import Trash from '@/pages/Trash';
 import BatchReview from '@/pages/BatchReview';
 
@@ -55,6 +56,7 @@ function App() {
         <Route path="/subjects" element={token ? <Subjects /> : <Navigate to="/login" />} />
         <Route path="/export" element={token ? <ExportPage /> : <Navigate to="/login" />} />
         <Route path="/pdf-history" element={token ? <PdfHistory /> : <Navigate to="/login" />} />
+        <Route path="/pdf-viewer" element={token ? <PdfViewer /> : <Navigate to="/login" />} />
         <Route path="/trash" element={token ? <Trash /> : <Navigate to="/login" />} />
         <Route path="/settings" element={token ? <Settings /> : <Navigate to="/login" />} />
       </Routes>
