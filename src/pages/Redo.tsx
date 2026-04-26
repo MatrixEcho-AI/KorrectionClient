@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { generateRedo, submitRedo, updateQuestion } from '@/api/questions';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { generateRedo, submitRedo, getRedoSession } from '@/api/questions';
 import { NavBar, Button, SpinLoading, Toast, Card } from 'antd-mobile';
 
 interface RedoQuestion {
@@ -13,6 +13,8 @@ interface RedoQuestion {
 export default function Redo() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const sessionIdParam = searchParams.get('sessionId');
   const [q, setQ] = useState<RedoQuestion | null>(null);
   const [sessionId, setSessionId] = useState<number>(0);
   const [selected, setSelected] = useState('');
@@ -22,7 +24,7 @@ export default function Redo() {
 
   useEffect(() => {
     loadRedo();
-  }, [id]);
+  }, [id, sessionIdParam]);
 
   const loadRedo = async () => {
     setLoading(true);
@@ -30,11 +32,17 @@ export default function Redo() {
     setResult(null);
     setSelected('');
     try {
-      const res = await generateRedo(Number(id));
-      setQ(res.data.question);
-      setSessionId(res.data.sessionId);
+      if (sessionIdParam) {
+        const res = await getRedoSession(Number(id), Number(sessionIdParam));
+        setQ(res.data.question);
+        setSessionId(res.data.sessionId);
+      } else {
+        const res = await generateRedo(Number(id));
+        setQ(res.data.question);
+        setSessionId(res.data.sessionId);
+      }
     } catch (err: any) {
-      setError(err.message || '生成失败');
+      setError(err.message || '加载失败');
     } finally {
       setLoading(false);
     }
@@ -51,12 +59,6 @@ export default function Redo() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleComplete = async () => {
-    await updateQuestion(Number(id), { status: 'completed' });
-    Toast.show({ content: '已完成', icon: 'success' });
-    navigate('/');
   };
 
   const optionLabels = ['A', 'B', 'C', 'D'];
@@ -145,20 +147,9 @@ export default function Redo() {
 
         {result && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {result.isCorrect ? (
-              <Button block color="primary" size="large" onClick={handleComplete}>
-                标记为完成
-              </Button>
-            ) : (
-              <>
-                <Button block color="primary" size="large" onClick={loadRedo}>
-                  重新生成一题
-                </Button>
-                <Button block fill="outline" size="large" onClick={() => navigate(`/questions/${id}/review`)}>
-                  返回复盘
-                </Button>
-              </>
-            )}
+            <Button block color="primary" size="large" onClick={() => navigate(-1)}>
+              返回列表
+            </Button>
           </div>
         )}
       </div>

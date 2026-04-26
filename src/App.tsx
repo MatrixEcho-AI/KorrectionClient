@@ -13,6 +13,7 @@ import Subjects from '@/pages/Subjects';
 import Settings from '@/pages/Settings';
 import ExportPage from '@/pages/ExportPage';
 import Trash from '@/pages/Trash';
+import BatchReview from '@/pages/BatchReview';
 
 function App() {
   const { init, token, isLoading } = useAuthStore();
@@ -39,6 +40,7 @@ function App() {
         <Route path="/questions/:id/summary" element={token ? <Summary /> : <Navigate to="/login" />} />
         <Route path="/questions/:id/review" element={token ? <Review /> : <Navigate to="/login" />} />
         <Route path="/questions/:id/redo" element={token ? <Redo /> : <Navigate to="/login" />} />
+        <Route path="/batch-review" element={token ? <BatchReview /> : <Navigate to="/login" />} />
         <Route path="/categories" element={token ? <Categories /> : <Navigate to="/login" />} />
         <Route path="/subjects" element={token ? <Subjects /> : <Navigate to="/login" />} />
         <Route path="/export" element={token ? <ExportPage /> : <Navigate to="/login" />} />

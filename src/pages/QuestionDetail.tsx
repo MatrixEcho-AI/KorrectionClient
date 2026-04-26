@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getQuestion, deleteQuestion, type Question } from '@/api/questions';
+import { getQuestion, deleteQuestion, updateQuestion, type Question } from '@/api/questions';
 import { NavBar, Button, SpinLoading, Image, Tag, Toast, Dialog } from 'antd-mobile';
 
 const statusMap: Record<string, string> = {
@@ -64,12 +64,13 @@ export default function QuestionDetail() {
       case 'summary':
         navigate(`/questions/${id}/review`);
         break;
-      case 'review':
-      case 'redo':
-      case 'completed':
-        navigate(`/questions/${id}/review`);
-        break;
     }
+  };
+
+  const handleComplete = async () => {
+    await updateQuestion(Number(id), { status: 'completed' });
+    Toast.show({ content: '已标记为完成', icon: 'success' });
+    load();
   };
 
   const handleDelete = async () => {
@@ -127,11 +128,15 @@ export default function QuestionDetail() {
       </div>
 
       <div style={{ padding: 12, borderTop: '1px solid #eee', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <Button block color="primary" size="large" onClick={nextAction}>
-          {q.status === 'photo' && '去总结'}
-          {q.status === 'summary' && '去复盘'}
-          {(q.status === 'review' || q.status === 'redo' || q.status === 'completed') && '复盘 / 重做'}
-        </Button>
+        {q.status === 'photo' && (
+          <Button block color="primary" size="large" onClick={nextAction}>去总结</Button>
+        )}
+        {q.status === 'summary' && (
+          <Button block color="primary" size="large" onClick={nextAction}>去复盘</Button>
+        )}
+        {q.status === 'redo' && (
+          <Button block color="primary" size="large" onClick={handleComplete}>标记为完成</Button>
+        )}
         <Button block fill="outline" size="large" style={{ color: '#ff3141' }} onClick={handleDelete}>
           删除题目
         </Button>

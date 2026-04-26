@@ -17,7 +17,7 @@ import {
   Image,
   Picker,
 } from 'antd-mobile';
-import { AddOutline, DeleteOutline, DownOutline } from 'antd-mobile-icons';
+import { AddOutline, DownOutline } from 'antd-mobile-icons';
 
 const statusMap: Record<string, string> = {
   photo: '总结',
@@ -90,12 +90,11 @@ export default function Home() {
     }
   };
 
-  const rightActions = (id: number) => [
+  const rightActions = [
     {
       key: 'delete',
-      text: <DeleteOutline />,
-      color: 'danger',
-      onClick: () => handleDelete(id),
+      text: '删除',
+      color: 'danger' as const,
     },
   ];
 
@@ -152,11 +151,19 @@ export default function Home() {
 
         <List>
           {questions.map((q) => (
-            <SwipeAction key={q.id} rightActions={rightActions(q.id)}>
-              <List.Item
-                onClick={() => navigate(`/questions/${q.id}`)}
-                prefix={
-                  q.images && q.images.length > 0 ? (
+            <SwipeAction
+              key={q.id}
+              rightActions={rightActions}
+              onAction={(action) => {
+                if (action.key === 'delete') handleDelete(q.id);
+              }}
+            >
+              <div style={{ background: '#fff', borderBottom: '1px solid #eee' }}>
+                <div
+                  onClick={() => navigate(`/questions/${q.id}`)}
+                  style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', gap: 12 }}
+                >
+                  {q.images && q.images.length > 0 ? (
                     <Image
                       src={q.images[0].image_url}
                       style={{ width: 56, height: 56, borderRadius: 8, objectFit: 'cover' }}
@@ -164,19 +171,48 @@ export default function Home() {
                     />
                   ) : (
                     <div style={{ width: 56, height: 56, borderRadius: 8, background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: 12 }}>无图</div>
-                  )
-                }
-                description={
-                  <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
-                    <Tag color={statusColors[q.status]} fill="outline" style={{ fontSize: 11 }}>
-                      {statusMap[q.status]}
-                    </Tag>
-                    <span style={{ fontSize: 12, color: '#999' }}>{q.category_name || '-'} · 复习{q.review_count}次</span>
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14 }}>题目 #{q.id}</div>
+                    <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
+                      <Tag color={statusColors[q.status]} fill="outline" style={{ fontSize: 11 }}>
+                        {statusMap[q.status]}
+                      </Tag>
+                      <span style={{ fontSize: 12, color: '#999' }}>{q.category_name || '-'} · 复习{q.review_count}次</span>
+                    </div>
                   </div>
-                }
-              >
-                <div style={{ fontSize: 14 }}>题目 #{q.id}</div>
-              </List.Item>
+                </div>
+
+                {q.status === 'redo' && (
+                  <div style={{ padding: '0 16px 12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {q.pending_redos && q.pending_redos.length > 0 ? (
+                      q.pending_redos.map((session) => (
+                        <div
+                          key={session.id}
+                          onClick={() => navigate(`/questions/${q.id}/redo?sessionId=${session.id}`)}
+                          style={{
+                            padding: 10,
+                            borderRadius: 6,
+                            background: '#f5f5f5',
+                            fontSize: 13,
+                            color: '#333',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <span style={{ color: '#1677ff', fontWeight: 500 }}>待做题 #{session.id}：</span>
+                          {session.question.question}
+                        </div>
+                      ))
+                    ) : null}
+                    {(!q.pending_redos || q.pending_redos.length < 3) && (
+                      <div style={{ fontSize: 12, color: '#999', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <SpinLoading color="primary" style={{ width: 14, height: 14 }} />
+                        正在生成更多题目，请稍候...
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </SwipeAction>
           ))}
         </List>
@@ -195,11 +231,19 @@ export default function Home() {
       </div>
 
       <div style={{ padding: 12, borderTop: '1px solid #eee' }}>
-        <Button block color="primary" size="large" onClick={() => navigate('/questions/new')}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <AddOutline /> 拍照录入
-          </span>
-        </Button>
+        {statusFilter === 'summary,review' ? (
+          <Button block color="primary" size="large" onClick={() => navigate('/batch-review')}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <AddOutline /> 复盘
+            </span>
+          </Button>
+        ) : (
+          <Button block color="primary" size="large" onClick={() => navigate('/questions/new')}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <AddOutline /> 拍照录入
+            </span>
+          </Button>
+        )}
       </div>
 
       <Picker

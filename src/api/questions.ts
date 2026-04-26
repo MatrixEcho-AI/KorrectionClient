@@ -8,6 +8,11 @@ export interface QuestionImage {
   sort_order: number;
 }
 
+export interface RedoSession {
+  id: number;
+  question: { question: string; options: string[]; answer: string; explanation: string };
+}
+
 export interface Question {
   id: number;
   user_id: number;
@@ -21,6 +26,7 @@ export interface Question {
   category_name?: string;
   images?: QuestionImage[];
   tags?: { id: number; name: string }[];
+  pending_redos?: RedoSession[];
 }
 
 export const getQuestions = (params?: {
@@ -64,6 +70,18 @@ export const generateRedo = (questionId: number) =>
   client.post(`/api/questions/${questionId}/redo`) as Promise<{
     code: number;
     data: { sessionId: number; question: { question: string; options: string[]; answer: string; explanation: string } };
+  }>;
+
+export const getRedoSession = (questionId: number, sessionId: number) =>
+  client.get(`/api/questions/${questionId}/redo/session/${sessionId}`) as Promise<{
+    code: number;
+    data: { sessionId: number; question: { question: string; options: string[]; answer: string; explanation: string } };
+  }>;
+
+export const getPendingRedos = (questionId: number) =>
+  client.get(`/api/questions/${questionId}/redo/pending`) as Promise<{
+    code: number;
+    data: { id: number; question: { question: string; options: string[]; answer: string; explanation: string }; createdAt: number }[];
   }>;
 
 export const submitRedo = (questionId: number, data: { session_id: number; answer: string }) =>
