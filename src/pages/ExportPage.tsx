@@ -2,7 +2,8 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getQuestions, type Question } from '@/api/questions';
 import { exportData } from '@/api/export';
-import { getProxyImageUrl } from '@/api/images';
+import { getCategories, type Category } from '@/api/categories';
+import { getTags, type Tag } from '@/api/tags';
 import { useSubjectStore } from '@/stores/subjectStore';
 import { generateAndSavePdf, type PdfRecord } from '@/utils/pdfExport';
 import { NavBar, List, Button, Checkbox, Toast, SpinLoading, Picker } from 'antd-mobile';
@@ -18,6 +19,15 @@ const optionLabels: Record<string, string> = {
   lastReviewAt: '最后复盘时间',
   categoryPath: '章节路径',
 };
+
+const statusOptions = [
+  { label: '全部状态', value: '' },
+  { label: '拍照', value: 'photo' },
+  { label: '总结', value: 'summary' },
+  { label: '复习', value: 'review' },
+  { label: '重做', value: 'redo' },
+  { label: '已完成', value: 'completed' },
+];
 
 export default function ExportPage() {
   const navigate = useNavigate();
@@ -46,16 +56,38 @@ export default function ExportPage() {
   const [pendingExport, setPendingExport] = useState(false);
   const [lastRecord, setLastRecord] = useState<PdfRecord | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
+  const generatingRef = useRef(false);
 
+  // filters
+  const [filterCategoryId, setFilterCategoryId] = useState<number | undefined>();
+  const [filterTagId, setFilterTagId] = useState<number | undefined>();
+  const [filterStatus, setFilterStatus] = useState<string | undefined>();
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [catPickerVisible, setCatPickerVisible] = useState(false);
+  const [tagPickerVisible, setTagPickerVisible] = useState(false);
+  const [statusPickerVisible, setStatusPickerVisible] = useState(false);
+
+  // load filters + questions when subject or filter changes
   useEffect(() => {
+    if (currentSubjectId) {
+      Promise.all([
+        getCategories(currentSubjectId),
+        getTags(currentSubjectId),
+      ]).then(([catRes, tagRes]) => {
+        setCategories(catRes.data);
+        setTags(tagRes.data);
+      }).catch(() => {});
+    }
     loadQuestions();
-  }, [currentSubjectId]);
+  }, [currentSubjectId, filterCategoryId, filterTagId, filterStatus]);
 
   useEffect(() => {
     if (!pendingExport) return;
+    if (generatingRef.current) return;
     if (!printRef.current || printQuestions.length === 0 || !printOptions) return;
 
-    setPendingExport(false);
+    generatingRef.current = true;
 
     (async () => {
       try {
@@ -64,16 +96,19 @@ export default function ExportPage() {
           `错题导出 (${selectedIds.length}题)`,
           selectedIds.length
         );
+        setPendingExport(false);
         setLastRecord(record);
         Toast.show({ content: 'PDF已保存到本地', icon: 'success' });
         navigate('/pdf-viewer', { state: { record } });
       } catch (err: any) {
+        setPendingExport(false);
         console.error('PDF生成失败:', err);
         Toast.show({ content: 'PDF生成失败: ' + (err.message || ''), icon: 'fail' });
       } finally {
         setLoading(false);
         setPrintQuestions([]);
         setPrintOptions(null);
+        generatingRef.current = false;
       }
     })();
   }, [pendingExport, printQuestions, printOptions]);
@@ -81,10 +116,12 @@ export default function ExportPage() {
   const loadQuestions = async () => {
     setListLoading(true);
     try {
-      const res = await getQuestions({
-        subject_id: currentSubjectId || undefined,
-        pageSize: 500,
-      });
+      const params: any = { pageSize: 500 };
+      if (currentSubjectId) params.subject_id = currentSubjectId;
+      if (filterCategoryId) params.category_id = filterCategoryId;
+      if (filterTagId) params.tag_id = filterTagId;
+      if (filterStatus) params.status = filterStatus;
+      const res = await getQuestions(params);
       setQuestions(res.data.list);
     } finally {
       setListLoading(false);
@@ -97,13 +134,15 @@ export default function ExportPage() {
     );
   };
 
-  const toggleAll = () => {
-    if (selectedIds.length === questions.length) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds(questions.map((q) => q.id));
-    }
+  const selectAllFiltered = () => {
+    setSelectedIds((prev) => {
+      const existing = new Set(prev);
+      for (const q of questions) existing.add(q.id);
+      return Array.from(existing);
+    });
   };
+
+  const clearSelection = () => setSelectedIds([]);
 
   const handleExport = async () => {
     if (selectedIds.length === 0) {
@@ -139,6 +178,20 @@ export default function ExportPage() {
 
   const sortFieldLabel = sortFieldOptions.find((o) => o.value === sortField)?.label || '创建时间';
   const sortOrderLabel = sortOrderOptions.find((o) => o.value === sortOrder)?.label || '降序';
+
+  const categoryOptions = [
+    { label: '全部章节', value: 0 },
+    ...categories.map((c) => ({ label: c.name, value: c.id })),
+  ];
+
+  const tagOptions = [
+    { label: '全部标签', value: 0 },
+    ...tags.map((t) => ({ label: t.name, value: t.id })),
+  ];
+
+  const catLabel = categoryOptions.find((o) => o.value === (filterCategoryId || 0))?.label || '全部章节';
+  const tagLabel = tagOptions.find((o) => o.value === (filterTagId || 0))?.label || '全部标签';
+  const statusLabel = statusOptions.find((o) => o.value === (filterStatus || ''))?.label || '全部状态';
 
   const renderPrintContent = () => {
     if (!printQuestions.length || !printOptions) return null;
@@ -177,17 +230,17 @@ export default function ExportPage() {
               <div style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10, color: '#111' }}>题目 {idx + 1}</div>
               {include.originalImage && origImages.map((img: any) => (
                 <div key={img.id}>
-                  <img src={getProxyImageUrl(img.image_url)} style={{ maxWidth: '100%', display: 'block', margin: '8px 0', border: '1px solid #ddd', borderRadius: 4 }} alt="" />
+                  <img src={img.image_url} style={{ maxWidth: '100%', display: 'block', margin: '8px 0', border: '1px solid #ddd', borderRadius: 4 }} alt="" />
                   {include.originalOcr && img.ocr_text && (
                     <div style={{ background: '#f8f9fa', padding: 8, borderRadius: 4, margin: '6px 0', fontSize: 13, color: '#555', whiteSpace: 'pre-wrap' }}>{img.ocr_text}</div>
                   )}
                 </div>
               ))}
               {include.wrongSolutionImage && wrongImages.map((img: any) => (
-                <img key={img.id} src={getProxyImageUrl(img.image_url)} style={{ maxWidth: '100%', display: 'block', margin: '8px 0', border: '1px solid #ddd', borderRadius: 4 }} alt="" />
+                <img key={img.id} src={img.image_url} style={{ maxWidth: '100%', display: 'block', margin: '8px 0', border: '1px solid #ddd', borderRadius: 4 }} alt="" />
               ))}
               {include.referenceImage && refImages.map((img: any) => (
-                <img key={img.id} src={getProxyImageUrl(img.image_url)} style={{ maxWidth: '100%', display: 'block', margin: '8px 0', border: '1px solid #ddd', borderRadius: 4 }} alt="" />
+                <img key={img.id} src={img.image_url} style={{ maxWidth: '100%', display: 'block', margin: '8px 0', border: '1px solid #ddd', borderRadius: 4 }} alt="" />
               ))}
               {include.reason && q.reason_text && (
                 <div style={{ margin: '4px 0', fontSize: 13, color: '#444' }}><strong>错题原因:</strong> {q.reason_text}</div>
@@ -216,13 +269,108 @@ export default function ExportPage() {
       <NavBar onBack={() => navigate(-1)}>导出 PDF</NavBar>
 
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: 12 }}>
-        <List header={`选择题目 (${selectedIds.length}/${questions.length})`}>
+
+        {/* ── 筛选条件 ── */}
+        <List header="筛选条件">
           <List.Item
-            prefix={<Checkbox checked={selectedIds.length === questions.length && questions.length > 0} onChange={toggleAll} />}
-            onClick={toggleAll}
+            extra={catLabel}
+            onClick={() => setCatPickerVisible(true)}
+            arrow
           >
-            全选
+            章节
           </List.Item>
+          <List.Item
+            extra={tagLabel}
+            onClick={() => setTagPickerVisible(true)}
+            arrow
+          >
+            标签
+          </List.Item>
+          <List.Item
+            extra={statusLabel}
+            onClick={() => setStatusPickerVisible(true)}
+            arrow
+          >
+            状态
+          </List.Item>
+        </List>
+
+        <Picker
+          columns={[categoryOptions]}
+          visible={catPickerVisible}
+          onClose={() => setCatPickerVisible(false)}
+          value={[filterCategoryId || 0]}
+          onConfirm={(v) => {
+            const val = v[0] as number;
+            setFilterCategoryId(val || undefined);
+            setCatPickerVisible(false);
+          }}
+          title="选择章节"
+        />
+        <Picker
+          columns={[tagOptions]}
+          visible={tagPickerVisible}
+          onClose={() => setTagPickerVisible(false)}
+          value={[filterTagId || 0]}
+          onConfirm={(v) => {
+            const val = v[0] as number;
+            setFilterTagId(val || undefined);
+            setTagPickerVisible(false);
+          }}
+          title="选择标签"
+        />
+        <Picker
+          columns={[statusOptions]}
+          visible={statusPickerVisible}
+          onClose={() => setStatusPickerVisible(false)}
+          value={[filterStatus || '']}
+          onConfirm={(v) => {
+            const val = v[0] as string;
+            setFilterStatus(val || undefined);
+            setStatusPickerVisible(false);
+          }}
+          title="选择状态"
+        />
+
+        {/* ── 题目列表 ── */}
+        <List
+          header={
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>题目 ({questions.length})</span>
+              <span style={{ fontSize: 13, color: '#1677ff', fontWeight: 500 }}>
+                已选 {selectedIds.length} 题
+              </span>
+            </div>
+          }
+          style={{ marginTop: 12 }}
+        >
+          <List.Item
+            style={{ background: '#f5f7fa' }}
+            prefix={
+              <Checkbox
+                checked={questions.length > 0 && questions.every((q) => selectedIds.includes(q.id))}
+                indeterminate={
+                  questions.some((q) => selectedIds.includes(q.id)) &&
+                  !questions.every((q) => selectedIds.includes(q.id))
+                }
+              />
+            }
+            onClick={selectAllFiltered}
+            extra={
+              <span style={{ fontSize: 12, color: '#1677ff' }}>{questions.length} 题</span>
+            }
+          >
+            全选筛选结果
+          </List.Item>
+          {selectedIds.length > 0 && (
+            <List.Item
+              style={{ background: '#f5f7fa' }}
+              onClick={clearSelection}
+            >
+              <span style={{ fontSize: 13, color: '#ff4d4f' }}>清除已选 ({selectedIds.length} 题)</span>
+            </List.Item>
+          )}
+
           {questions.map((q) => (
             <List.Item
               key={q.id}
@@ -233,11 +381,33 @@ export default function ExportPage() {
                 />
               }
               onClick={() => toggleSelect(q.id)}
-              extra={<span style={{ fontSize: 12, color: '#999' }}>{q.category_name}</span>}
+              extra={
+                <span style={{ fontSize: 12, color: '#999', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {q.category_name}
+                </span>
+              }
             >
-              <span style={{ fontSize: 14 }}>题目 #{q.id}</span>
+              <div>
+                <span style={{ fontSize: 14 }}>题目 #{q.id}</span>
+                {q.tags && q.tags.length > 0 && (
+                  <span style={{ marginLeft: 6, fontSize: 11, color: '#1677ff', background: '#e6f4ff', padding: '2px 6px', borderRadius: 4 }}>
+                    {q.tags.slice(0, 2).join(' ')}{q.tags.length > 2 ? '...' : ''}
+                  </span>
+                )}
+                {q.review_count > 0 && (
+                  <span style={{ marginLeft: 4, fontSize: 11, color: '#fa8c16' }}>
+                    复习{q.review_count}次
+                  </span>
+                )}
+              </div>
             </List.Item>
           ))}
+
+          {!listLoading && questions.length === 0 && (
+            <List.Item>
+              <span style={{ color: '#999' }}>暂无题目</span>
+            </List.Item>
+          )}
         </List>
 
         {listLoading && (
@@ -246,6 +416,7 @@ export default function ExportPage() {
           </div>
         )}
 
+        {/* ── 包含内容 ── */}
         <List header="包含内容" style={{ marginTop: 12 }}>
           {Object.entries(optionLabels).map(([key, label]) => (
             <List.Item
@@ -263,6 +434,7 @@ export default function ExportPage() {
           ))}
         </List>
 
+        {/* ── 排序 ── */}
         <List header="排序" style={{ marginTop: 12 }}>
           <List.Item
             extra={sortFieldLabel}
@@ -310,7 +482,7 @@ export default function ExportPage() {
 
       <div style={{ padding: 12, borderTop: '1px solid #eee' }}>
         <Button block color="primary" size="large" loading={loading} onClick={handleExport}>
-          {loading ? '生成中...' : '导出 PDF'}
+          {loading ? '生成中...' : `导出 PDF (${selectedIds.length} 题)`}
         </Button>
       </div>
 

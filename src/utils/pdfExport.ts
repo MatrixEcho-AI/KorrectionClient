@@ -51,9 +51,20 @@ export async function getPdfUri(id: string): Promise<string> {
   return result.uri;
 }
 
+function blobToDataUri(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
 async function preloadImages(element: HTMLElement) {
   const images = Array.from(element.querySelectorAll('img'));
-  const replacements: { img: HTMLImageElement; objectUrl: string }[] = [];
+  const replacements: { img: HTMLImageElement; originalSrc: string }[] = [];
+
+  const { value: token } = await Preferences.get({ key: 'token' });
 
   for (const img of images) {
     img.removeAttribute('crossOrigin');
@@ -62,20 +73,44 @@ async function preloadImages(element: HTMLElement) {
     const src = img.getAttribute('src');
     if (!src || src.startsWith('blob:') || src.startsWith('data:')) continue;
 
-    const proxySrc = getProxyImageUrl(src);
-    try {
-      const response = await fetch(proxySrc);
-      const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      img.setAttribute('data-original-src', src);
-      img.src = objectUrl;
-      replacements.push({ img, objectUrl });
-    } catch (err) {
-      console.error('Failed to preload image:', src, err);
+    // Try the original URL first (direct OSS access — works in Capacitor WebView
+    // where CORS is not enforced), then fall back to the proxy for browser
+    // environments where CORS requires it.
+    const proxySrc = src.includes('/api/images/proxy') ? src : getProxyImageUrl(src);
+    const urlsToTry = src.includes('/api/images/proxy')
+      ? [src]
+      : [src, proxySrc];
+
+    for (const fetchUrl of urlsToTry) {
+      try {
+        const isProxy = fetchUrl.includes('/api/images/proxy');
+        const fetchHeaders: Record<string, string> = {};
+        if (isProxy && token) {
+          fetchHeaders['Authorization'] = `Bearer ${token}`;
+        }
+        const response = await fetch(fetchUrl, { headers: fetchHeaders });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.startsWith('image/')) {
+          throw new Error(`Not an image: ${contentType}`);
+        }
+        const blob = await response.blob();
+        const dataUri = await blobToDataUri(blob);
+        img.setAttribute('data-original-src', src);
+        img.src = dataUri;
+        replacements.push({ img, originalSrc: src });
+        break; // success, don't try next URL
+      } catch (err) {
+        if (fetchUrl === urlsToTry[urlsToTry.length - 1]) {
+          console.error('Failed to preload image:', src, err);
+        }
+      }
     }
   }
 
-  // wait for all images to load
+  // wait for all images to finish loading
   await Promise.all(
     images.map((img) => {
       if (img.complete) return Promise.resolve();
@@ -89,12 +124,10 @@ async function preloadImages(element: HTMLElement) {
   return replacements;
 }
 
-function restoreImages(replacements: { img: HTMLImageElement; objectUrl: string }[]) {
-  for (const { img, objectUrl } of replacements) {
-    const originalSrc = img.getAttribute('data-original-src');
-    if (originalSrc) img.src = originalSrc;
+function restoreImages(replacements: { img: HTMLImageElement; originalSrc: string }[]) {
+  for (const { img, originalSrc } of replacements) {
+    img.src = originalSrc;
     img.removeAttribute('data-original-src');
-    URL.revokeObjectURL(objectUrl);
   }
 }
 
@@ -117,7 +150,7 @@ export async function generateAndSavePdf(
   try {
     const canvas = await html2canvas(element, {
       scale: 2,
-      useCORS: true,
+      useCORS: false,
       backgroundColor: '#ffffff',
       logging: false,
     });

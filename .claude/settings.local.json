@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(npx cap *)",
+      "Bash(./gradlew assembleDebug)",
+      "Bash(git *)",
+      "Bash(powershell.exe *)"
+    ]
+  }
+}
