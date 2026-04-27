@@ -5,20 +5,34 @@ import { exportData } from '@/api/export';
 import { getCategories, type Category } from '@/api/categories';
 import { getTags, type Tag } from '@/api/tags';
 import { useSubjectStore } from '@/stores/subjectStore';
-import { generateAndSavePdf, type PdfRecord, type PageSize } from '@/utils/pdfExport';
+import { generateAndSavePdf, type PdfRecord, type PageSize, type ProgressInfo, type PrintQuestion, type PrintBlock } from '@/utils/pdfExport';
 import { NavBar, List, Button, Checkbox, Toast, SpinLoading, Picker, Cascader } from 'antd-mobile';
+
+interface OptionGroup {
+  title: string;
+  keys: string[];
+}
 
 const optionLabels: Record<string, string> = {
   originalImage: '原题图片',
-  originalOcr: 'OCR 文本',
+  originalOcr: '原题OCR',
   wrongSolutionImage: '错解图片',
+  wrongSolutionOcr: '错解OCR',
   referenceImage: '参考答案图',
+  referenceOcr: '参考答案OCR',
   reason: '错题原因',
   tags: '标签',
   reviewCount: '复习次数',
   lastReviewAt: '最后复盘时间',
   categoryPath: '章节路径',
 };
+
+const optionGroups: OptionGroup[] = [
+  { title: '原题', keys: ['originalImage', 'originalOcr'] },
+  { title: '错解', keys: ['wrongSolutionImage', 'wrongSolutionOcr'] },
+  { title: '参考答案', keys: ['referenceImage', 'referenceOcr'] },
+  { title: '其他', keys: ['reason', 'tags', 'reviewCount', 'lastReviewAt', 'categoryPath'] },
+];
 
 const statusOptions = [
   { label: '全部状态', value: '' },
@@ -64,7 +78,9 @@ export default function ExportPage() {
     originalImage: true,
     originalOcr: true,
     wrongSolutionImage: true,
+    wrongSolutionOcr: true,
     referenceImage: true,
+    referenceOcr: true,
     reason: true,
     tags: true,
     reviewCount: true,
@@ -82,8 +98,8 @@ export default function ExportPage() {
   const [printQuestions, setPrintQuestions] = useState<any[]>([]);
   const [printOptions, setPrintOptions] = useState<Record<string, boolean> | null>(null);
   const [pendingExport, setPendingExport] = useState(false);
+  const [exportProgress, setExportProgress] = useState<ProgressInfo | null>(null);
   const [lastRecord, setLastRecord] = useState<PdfRecord | null>(null);
-  const printRef = useRef<HTMLDivElement>(null);
   const generatingRef = useRef(false);
 
   // filters
@@ -113,17 +129,71 @@ export default function ExportPage() {
   useEffect(() => {
     if (!pendingExport) return;
     if (generatingRef.current) return;
-    if (!printRef.current || printQuestions.length === 0 || !printOptions) return;
+    if (printQuestions.length === 0 || !printOptions) return;
 
     generatingRef.current = true;
 
     (async () => {
       try {
+        // Build structured print data from questions + options
+        const include: Record<string, boolean> = {};
+        for (const [k, v] of Object.entries(printOptions)) include[k] = v !== false;
+
+        const printData: PrintQuestion[] = printQuestions.map((q: any, idx: number) => {
+          const blocks: PrintBlock[] = [];
+
+          blocks.push({ type: 'heading', text: q.name || `题目 ${idx + 1}` });
+
+          // Info box: tags, review count, last review, category
+          {
+            const infoLines: string[] = [];
+            if (include.tags && q.tags?.length > 0) infoLines.push(`标签: ${q.tags.join(', ')}`);
+            if (include.reviewCount) infoLines.push(`复习次数: ${q.reviewCount}`);
+            if (include.lastReviewAt) infoLines.push(`最后复盘: ${q.lastReviewAt}`);
+            if (include.categoryPath && q.category_name) infoLines.push(`章节: ${q.category_name}`);
+            if (infoLines.length > 0) {
+              blocks.push({ type: 'text', text: infoLines.join('\n'), boxed: true });
+            }
+          }
+
+          // Reason box
+          if (include.reason && q.reason_text) {
+            blocks.push({ type: 'text', text: `错题原因: ${q.reason_text}`, boxed: true });
+          }
+
+          const origImages = q.images?.filter((i: any) => i.image_type === 'original_question') || [];
+          const wrongImages = q.images?.filter((i: any) => i.image_type === 'wrong_solution') || [];
+          const refImages = q.images?.filter((i: any) => i.image_type === 'reference_answer') || [];
+
+          for (const img of origImages) {
+            if (include.originalImage) blocks.push({ type: 'image', imageUrl: img.image_url });
+            if (include.originalOcr && img.ocr_text) {
+              blocks.push({ type: 'text', text: img.ocr_text });
+            }
+          }
+          for (const img of wrongImages) {
+            if (include.wrongSolutionImage) blocks.push({ type: 'image', imageUrl: img.image_url });
+            if (include.wrongSolutionOcr && img.ocr_text) {
+              blocks.push({ type: 'text', text: img.ocr_text });
+            }
+          }
+          for (const img of refImages) {
+            if (include.referenceImage) blocks.push({ type: 'image', imageUrl: img.image_url });
+            if (include.referenceOcr && img.ocr_text) {
+              blocks.push({ type: 'text', text: img.ocr_text });
+            }
+          }
+
+          return { blocks };
+        });
+
+        setExportProgress({ phase: 'images', current: 0, total: 0 });
         const record = await generateAndSavePdf(
-          printRef.current!,
+          printData,
           `错题导出 (${selectedIds.length}题)`,
           selectedIds.length,
-          pageSize
+          pageSize,
+          (info) => setExportProgress(info)
         );
         setPendingExport(false);
         setLastRecord(record);
@@ -137,6 +207,7 @@ export default function ExportPage() {
         setLoading(false);
         setPrintQuestions([]);
         setPrintOptions(null);
+        setExportProgress(null);
         generatingRef.current = false;
       }
     })();
@@ -222,17 +293,6 @@ export default function ExportPage() {
     { label: 'B5 (176×250mm)', value: 'b5' },
   ];
 
-  const pageDimensions: Record<PageSize, { w: number; h: number }> = {
-    a4: { w: 210, h: 297 },
-    a5: { w: 148, h: 210 },
-    b4: { w: 250, h: 353 },
-    b5: { w: 176, h: 250 },
-  };
-
-  // Half usable page height in CSS px (container is 794px = A4 width)
-  const dims = pageDimensions[pageSize];
-  const maxImgHeightPx = Math.round((dims.h - 40) / 2 * 794 / dims.w);
-
   const sortFieldLabel = sortFieldOptions.find((o) => o.value === sortField)?.label || '创建时间';
   const sortOrderLabel = sortOrderOptions.find((o) => o.value === sortOrder)?.label || '降序';
   const pageSizeLabel = pageSizeOptions.find((o) => o.value === pageSize)?.label || 'A4';
@@ -249,81 +309,6 @@ export default function ExportPage() {
     : '全部章节';
   const tagLabel = tagOptions.find((o) => o.value === (filterTagId || 0))?.label || '全部标签';
   const statusLabel = statusOptions.find((o) => o.value === (filterStatus || ''))?.label || '全部状态';
-
-  const renderPrintContent = () => {
-    if (!printQuestions.length || !printOptions) return null;
-
-    const include = {
-      originalImage: printOptions.originalImage !== false,
-      originalOcr: printOptions.originalOcr !== false,
-      wrongSolutionImage: printOptions.wrongSolutionImage !== false,
-      referenceImage: printOptions.referenceImage !== false,
-      reason: printOptions.reason !== false,
-      tags: printOptions.tags !== false,
-      reviewCount: printOptions.reviewCount !== false,
-      lastReviewAt: printOptions.lastReviewAt !== false,
-      categoryPath: printOptions.categoryPath !== false,
-    };
-
-    return (
-      <div
-        ref={printRef}
-        style={{
-          position: 'fixed',
-          left: -9999,
-          top: 0,
-          width: 794,
-          background: '#fff',
-          padding: 24,
-        }}
-      >
-        {printQuestions.map((q, idx) => {
-          const origImages = q.images?.filter((i: any) => i.image_type === 'original_question') || [];
-          const wrongImages = q.images?.filter((i: any) => i.image_type === 'wrong_solution') || [];
-          const refImages = q.images?.filter((i: any) => i.image_type === 'reference_answer') || [];
-
-          return (
-            <div key={q.id} style={{ marginBottom: 24, borderBottom: '1px solid #eee', paddingBottom: 16 }}>
-              <div style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10, color: '#111' }}>{q.name || `题目 ${idx + 1}`}</div>
-              {include.originalImage && origImages.map((img: any) => (
-                <div key={img.id}>
-                  <img src={img.image_url} style={{ maxWidth: '100%', maxHeight: maxImgHeightPx, objectFit: 'contain', display: 'block', margin: '8px 0', border: '1px solid #ddd', borderRadius: 4 }} alt="" />
-                  {include.originalOcr && img.ocr_text && (
-                    <div style={{ background: '#f8f9fa', padding: 8, borderRadius: 4, margin: '6px 0', fontSize: 13, color: '#555', whiteSpace: 'pre-wrap' }}>{img.ocr_text}</div>
-                  )}
-                </div>
-              ))}
-              {include.wrongSolutionImage && wrongImages.map((img: any) => (
-                <div key={img.id}>
-                  <img src={img.image_url} style={{ maxWidth: '100%', maxHeight: maxImgHeightPx, objectFit: 'contain', display: 'block', margin: '8px 0', border: '1px solid #ddd', borderRadius: 4 }} alt="" />
-                </div>
-              ))}
-              {include.referenceImage && refImages.map((img: any) => (
-                <div key={img.id}>
-                  <img src={img.image_url} style={{ maxWidth: '100%', maxHeight: maxImgHeightPx, objectFit: 'contain', display: 'block', margin: '8px 0', border: '1px solid #ddd', borderRadius: 4 }} alt="" />
-                </div>
-              ))}
-              {include.reason && q.reason_text && (
-                <div style={{ margin: '4px 0', fontSize: 13, color: '#444' }}><strong>错题原因:</strong> {q.reason_text}</div>
-              )}
-              {include.tags && q.tags?.length > 0 && (
-                <div style={{ margin: '4px 0', fontSize: 13, color: '#444' }}><strong>标签:</strong> {q.tags.join(', ')}</div>
-              )}
-              {include.reviewCount && (
-                <div style={{ margin: '4px 0', fontSize: 13, color: '#444' }}><strong>复习次数:</strong> {q.reviewCount}</div>
-              )}
-              {include.lastReviewAt && (
-                <div style={{ margin: '4px 0', fontSize: 13, color: '#444' }}><strong>最后复盘:</strong> {q.lastReviewAt}</div>
-              )}
-              {include.categoryPath && q.category_name && (
-                <div style={{ margin: '4px 0', fontSize: 13, color: '#444' }}><strong>章节:</strong> {q.category_name}</div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -473,22 +458,29 @@ export default function ExportPage() {
         )}
 
         {/* ── 包含内容 ── */}
-        <List header="包含内容" style={{ marginTop: 12 }}>
-          {Object.entries(optionLabels).map(([key, label]) => (
-            <List.Item
-              key={key}
-              prefix={
-                <Checkbox
-                  checked={(options as any)[key]}
-                  onChange={(checked) => setOptions((prev) => ({ ...prev, [key]: checked }))}
-                />
-              }
-              onClick={() => setOptions((prev) => ({ ...prev, [key]: !((prev as any)[key]) }))}
-            >
-              {label}
-            </List.Item>
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 500, color: '#333', padding: '8px 0', margin: '0 12px' }}>包含内容</div>
+          {optionGroups.map((group) => (
+            <div key={group.title} style={{ margin: '0 12px 12px', background: '#fff', borderRadius: 8, padding: 10, border: '1px solid #eee' }}>
+              <div style={{ fontSize: 13, color: '#999', marginBottom: 6, fontWeight: 500 }}>{group.title}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+                {group.keys.map((key) => (
+                  <div
+                    key={key}
+                    onClick={() => setOptions((prev) => ({ ...prev, [key]: !((prev as any)[key]) }))}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0', cursor: 'pointer' }}
+                  >
+                    <Checkbox
+                      checked={(options as any)[key]}
+                      onChange={(checked) => setOptions((prev) => ({ ...prev, [key]: checked }))}
+                    />
+                    <span style={{ fontSize: 13, color: '#333' }}>{optionLabels[key]}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           ))}
-        </List>
+        </div>
 
         {/* ── 排序 ── */}
         <List header="排序" style={{ marginTop: 12 }}>
@@ -556,12 +548,32 @@ export default function ExportPage() {
       </div>
 
       <div style={{ padding: 12, borderTop: '1px solid #eee' }}>
+        {exportProgress && (
+          <div style={{ marginBottom: 10, background: '#f0f5ff', borderRadius: 8, padding: 10, border: '1px solid #d6e4ff' }}>
+            <div style={{ fontSize: 13, color: '#1677ff', fontWeight: 500, marginBottom: 6 }}>
+              {exportProgress.phase === 'images'
+                ? exportProgress.total === 0
+                  ? '正在准备图片...'
+                  : `正在下载图片 (${exportProgress.current}/${exportProgress.total})`
+                : `正在生成页面 (${exportProgress.current}/${exportProgress.total})`}
+            </div>
+            <div style={{ height: 4, background: '#e8e8e8', borderRadius: 2, overflow: 'hidden' }}>
+              <div style={{
+                height: '100%',
+                background: '#1677ff',
+                borderRadius: 2,
+                transition: 'width 0.2s',
+                width: exportProgress.total === 0 && exportProgress.phase === 'images'
+                  ? '50%'
+                  : `${Math.round(exportProgress.current / Math.max(exportProgress.total, 1) * 100)}%`,
+              }} />
+            </div>
+          </div>
+        )}
         <Button block color="primary" size="large" loading={loading} onClick={handleExport}>
           {loading ? '生成中...' : `导出 PDF (${selectedIds.length} 题)`}
         </Button>
       </div>
-
-      {renderPrintContent()}
     </div>
   );
 }

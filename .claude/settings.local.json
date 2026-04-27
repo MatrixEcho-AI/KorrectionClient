@@ -7,7 +7,8 @@
       "Bash(./gradlew assembleDebug)",
       "Bash(git *)",
       "Bash(powershell.exe *)",
-      "Bash(adb logcat *)"
+      "Bash(adb logcat *)",
+      "Bash(adb install *)"
     ]
   }
 }
