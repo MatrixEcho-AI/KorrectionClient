@@ -17,7 +17,7 @@ import {
   Picker,
   SearchBar,
 } from 'antd-mobile';
-import { AddOutline, DownOutline } from 'antd-mobile-icons';
+import { AddOutline, ClockCircleOutline, DownOutline } from 'antd-mobile-icons';
 
 const statusMap: Record<string, string> = {
   photo: '总结',
@@ -302,14 +302,14 @@ export default function Home() {
         {statusFilter === 'summary,review' && (
           <Button block color="primary" size="large" onClick={() => navigate('/batch-review')}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <AddOutline /> 复盘
+              <ClockCircleOutline /> 复盘
             </span>
           </Button>
         )}
         {statusFilter !== 'summary,review' && statusFilter !== 'redo' && statusFilter !== 'completed' && (
           <Button block color="primary" size="large" onClick={() => navigate('/questions/new')}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <AddOutline /> 拍照录入
+              <AddOutline /> 录入
             </span>
           </Button>
         )}
