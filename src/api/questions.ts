@@ -39,6 +39,7 @@ export const getQuestions = (params?: {
   category_id?: number;
   tag_id?: number;
   subject_id?: number;
+  keyword?: string;
   page?: number;
   pageSize?: number;
 }) =>

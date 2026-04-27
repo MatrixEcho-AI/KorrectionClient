@@ -2,6 +2,7 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Preferences } from '@capacitor/preferences';
 import jsPDF from 'jspdf';
 import { getProxyImageUrl } from '@/api/images';
+import { cacheImage } from './imageCache';
 
 export type PageSize = 'a4' | 'a5' | 'b4' | 'b5';
 
@@ -91,7 +92,10 @@ async function fetchImageAsDataUri(url: string, token: string | null): Promise<s
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const contentType = response.headers.get('content-type') || '';
       if (!contentType.startsWith('image/')) throw new Error(`Not an image: ${contentType}`);
-      return await blobToDataUri(await response.blob());
+      const blob = await response.blob();
+      const dataUri = await blobToDataUri(blob);
+      cacheImage(url).catch(() => {}); // background cache for next time
+      return dataUri;
     } catch (err) {
       if (fetchUrl === urlsToTry[urlsToTry.length - 1]) {
         console.error('Failed to load image:', url, err);
@@ -115,6 +119,7 @@ function renderTextBlock(text: string, type: 'heading' | 'text', usableWidthMm: 
   const fontSize = (customFontSizePt ?? fontSizePt(type)) * ptToPx * scale;
   const lineHeight = fontSize * 1.6;
   const paddingPx = boxed ? 12 * scale : 0;
+  const textTopPad = 3 * scale; // prevent first line ascenders from clipping
   const maxTextWidthPx = usableWidthMm * mmToPx * scale - paddingPx * 2;
 
   const canvas = document.createElement('canvas');
@@ -141,7 +146,7 @@ function renderTextBlock(text: string, type: 'heading' | 'text', usableWidthMm: 
 
   const textH = Math.max(1, Math.ceil(lines.length * lineHeight));
   const totalW = usableWidthMm * mmToPx * scale;
-  const totalH = textH + paddingPx * 2;
+  const totalH = textH + paddingPx * 2 + textTopPad;
 
   canvas.width = totalW;
   canvas.height = totalH;
@@ -158,7 +163,7 @@ function renderTextBlock(text: string, type: 'heading' | 'text', usableWidthMm: 
   ctx.textBaseline = 'top';
 
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i]) ctx.fillText(lines[i], paddingPx, paddingPx + i * lineHeight);
+    if (lines[i]) ctx.fillText(lines[i], paddingPx, paddingPx + textTopPad + i * lineHeight);
   }
 
   const dataUri = canvas.toDataURL('image/png');
@@ -182,32 +187,15 @@ export async function generateAndSavePdf(
   pageSize: PageSize = 'a4',
   onProgress?: (info: ProgressInfo) => void
 ): Promise<PdfRecord> {
-  // ── Phase 1: preload all images ──
+  // ── Count total for progress ──
+  let totalImages = 0;
+  questions.forEach((q) => q.blocks.forEach((b) => { if (b.type === 'image') totalImages++; }));
+  let loadedImages = 0;
+  onProgress?.({ phase: 'images', current: 0, total: Math.max(totalImages, 1) });
+
+  // ── Build PDF (load images lazily to limit memory) ──
   const { value: token } = await Preferences.get({ key: 'token' });
-  const imageBlocks: { qIdx: number; bIdx: number; url: string }[] = [];
-  questions.forEach((q, qi) => {
-    q.blocks.forEach((b, bi) => {
-      if (b.type === 'image' && b.imageUrl) {
-        imageBlocks.push({ qIdx: qi, bIdx: bi, url: b.imageUrl });
-      }
-    });
-  });
-
-  const imageDataUriMap = new Map<string, string>();
-  let loaded = 0;
-  const total = imageBlocks.length;
-
-  for (const ib of imageBlocks) {
-    if (!imageDataUriMap.has(ib.url)) {
-      const dataUri = await fetchImageAsDataUri(ib.url, token);
-      if (dataUri) imageDataUriMap.set(ib.url, dataUri);
-    }
-    loaded++;
-    onProgress?.({ phase: 'images', current: loaded, total });
-  }
-  if (total === 0) onProgress?.({ phase: 'images', current: 0, total: 0 });
-
-  // ── Phase 2: build PDF ──
+  const imageCache = new Map<string, string>();
   const margin = 20; // 2cm — page border position
   const pad = 5; // extra padding between border and content
   const contentMargin = margin + pad;
@@ -232,7 +220,13 @@ export async function generateAndSavePdf(
       const block = questions[qi].blocks[bi];
 
       if (block.type === 'image' && block.imageUrl) {
-        const dataUri = imageDataUriMap.get(block.imageUrl);
+        let dataUri = imageCache.get(block.imageUrl);
+        if (!dataUri) {
+          dataUri = await fetchImageAsDataUri(block.imageUrl, token) ?? undefined;
+          if (dataUri) imageCache.set(block.imageUrl, dataUri);
+          loadedImages++;
+          onProgress?.({ phase: 'images', current: loadedImages, total: Math.max(totalImages, 1) });
+        }
         if (!dataUri) continue;
 
         const imgProps = pdf.getImageProperties(dataUri);
@@ -240,14 +234,13 @@ export async function generateAndSavePdf(
         let imgH = (imgProps.height * imgW) / imgProps.width;
 
         if (imgH > usableHeight) {
-          // Image too tall — scale to fit height
           if (y > contentMargin) { pdf.addPage(); y = contentMargin; }
           const scale = usableHeight / imgH;
           imgW = usableWidth * scale;
           imgH = usableHeight;
           const imgX = contentMargin + (usableWidth - imgW) / 2;
           pdf.addImage(dataUri, 'JPEG', imgX, y, imgW, imgH);
-          y = bottom; // force next block to new page
+          y = bottom;
         } else if (y + imgH > bottom) {
           pdf.addPage(); y = contentMargin;
           pdf.addImage(dataUri, 'JPEG', contentMargin, y, imgW, imgH);
@@ -264,6 +257,11 @@ export async function generateAndSavePdf(
         }
         pdf.addImage(rendered.dataUri, 'PNG', contentMargin, y, rendered.imgW, rendered.imgH);
         y += rendered.imgH + BLOCK_GAP_MM;
+        // Release the data URI to free memory
+        if (rendered.dataUri.length > 10000) {
+          // Large data URIs: remove the reference so GC can collect
+          rendered.dataUri = '';
+        }
       }
     }
   }

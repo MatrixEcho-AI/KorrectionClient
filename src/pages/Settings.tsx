@@ -4,17 +4,26 @@ import { useAuthStore } from '@/stores/authStore';
 import { Preferences } from '@capacitor/preferences';
 import { NavBar, List, Switch, Toast, Dialog, Button } from 'antd-mobile';
 import { enableKeepAwake, disableKeepAwake } from '@/utils/keepAwake';
+import { getCacheSize, formatSize, clearImageCache } from '@/utils/imageCache';
 
 export default function Settings() {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   const [keepAwake, setKeepAwake] = useState(false);
+  const [cacheSize, setCacheSize] = useState(0);
+  const [clearVisible, setClearVisible] = useState(false);
   const [logoutVisible, setLogoutVisible] = useState(false);
+
+  const loadCacheSize = async () => {
+    const size = await getCacheSize();
+    setCacheSize(size);
+  };
 
   useEffect(() => {
     Preferences.get({ key: 'keep_awake' }).then(({ value }) => {
       setKeepAwake(value === 'true');
     });
+    loadCacheSize();
   }, []);
 
   const handleKeepAwakeChange = async (checked: boolean) => {
@@ -52,6 +61,20 @@ export default function Settings() {
           >
             保持亮屏
           </List.Item>
+          <List.Item
+            extra={formatSize(cacheSize)}
+            arrow
+            onClick={() => { loadCacheSize(); Toast.show({ content: `图片缓存: ${formatSize(cacheSize)}` }); }}
+          >
+            图片缓存
+          </List.Item>
+          {cacheSize > 0 && (
+            <List.Item
+              onClick={() => setClearVisible(true)}
+            >
+              <span style={{ color: '#ff4d4f' }}>清空图片缓存</span>
+            </List.Item>
+          )}
         </List>
 
         <List header="导出管理">
@@ -72,6 +95,28 @@ export default function Settings() {
           退出账号
         </Button>
       </div>
+
+      <Dialog
+        visible={clearVisible}
+        content={`确定清空图片缓存（${formatSize(cacheSize)}）？`}
+        closeOnAction
+        onClose={() => setClearVisible(false)}
+        actions={[
+          { key: 'cancel', text: '取消', onClick: () => setClearVisible(false) },
+          {
+            key: 'confirm',
+            text: '清空',
+            danger: true,
+            bold: true,
+            onClick: async () => {
+              setClearVisible(false);
+              await clearImageCache();
+              setCacheSize(0);
+              Toast.show({ content: '缓存已清空', icon: 'success' });
+            },
+          },
+        ]}
+      />
 
       <Dialog
         visible={logoutVisible}

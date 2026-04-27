@@ -15,6 +15,7 @@ import {
   SpinLoading,
   Image,
   Picker,
+  SearchBar,
 } from 'antd-mobile';
 import { AddOutline, DownOutline } from 'antd-mobile-icons';
 
@@ -40,6 +41,8 @@ export default function Home() {
   const { subjects, currentSubjectId, fetch: fetchSubjects, setCurrent, init: initSubject } = useSubjectStore();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [statusFilter, setStatusFilter] = useState('');
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [debouncedKeyword, setDebouncedKeyword] = useState('');
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -71,7 +74,18 @@ export default function Home() {
   useEffect(() => {
     loadQuestions(1);
     loadStats();
-  }, [statusFilter, currentSubjectId]);
+  }, [statusFilter, currentSubjectId, debouncedKeyword]);
+
+  // Debounce search keyword
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedKeyword(searchKeyword), 300);
+    return () => clearTimeout(timer);
+  }, [searchKeyword]);
+
+  // Reset search when switching away from "全部" tab
+  useEffect(() => {
+    if (statusFilter !== '') setSearchKeyword('');
+  }, [statusFilter]);
 
   const loadQuestions = async (p: number) => {
     setLoading(true);
@@ -79,6 +93,7 @@ export default function Home() {
       const res = await getQuestions({
         subject_id: currentSubjectId || undefined,
         status: statusFilter || undefined,
+        keyword: debouncedKeyword || undefined,
         page: p,
         pageSize,
       });
@@ -120,9 +135,10 @@ export default function Home() {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <NavBar
-        back={null}
-        left={
+      <div style={{ position: 'sticky', top: 0, zIndex: 100, background: '#fff' }}>
+        <NavBar
+          back={null}
+          left={
           <div
             style={{ display: 'flex', alignItems: 'center', gap: 4, fontWeight: 700 }}
             onClick={() => setPickerVisible(true)}
@@ -159,6 +175,19 @@ export default function Home() {
           />
         ))}
       </Tabs>
+
+      {statusFilter === '' && (
+          <div style={{ padding: '8px 12px', background: '#f8f9fa', borderBottom: '1px solid #eee' }}>
+            <SearchBar
+              placeholder="搜索题名、OCR、错因、标签、章节..."
+              value={searchKeyword}
+              onChange={(v) => setSearchKeyword(v)}
+              onClear={() => { setSearchKeyword(''); setDebouncedKeyword(''); }}
+              showCancelButton
+            />
+          </div>
+        )}
+      </div>
 
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: 12, paddingBottom: (statusFilter === 'redo' || statusFilter === 'completed') ? 12 : 80 }}>
         {!currentSubject && !loading && (
