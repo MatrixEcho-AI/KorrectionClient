@@ -5,7 +5,7 @@ import { createQuestion, uploadImage, triggerOcr, triggerAutoSummary } from '@/a
 import { useCategoryStore } from '@/stores/categoryStore';
 import { useSubjectStore } from '@/stores/subjectStore';
 import { enhanceDocument } from '@/utils/image';
-import { NavBar, Button, Cascader, Toast, Image, Card, Empty, Input } from 'antd-mobile';
+import { NavBar, Button, Cascader, Toast, Image, Card, Empty, Input, ActionSheet } from 'antd-mobile';
 import { DeleteOutline } from 'antd-mobile-icons';
 import Cropper from 'cropperjs';
 
@@ -50,6 +50,8 @@ export default function QuestionNew() {
   const [editorImage, setEditorImage] = useState('');
   const [editorType, setEditorType] = useState('');
   const [sharpenEnabled, setSharpenEnabled] = useState(true);
+  const [cameraSheetVisible, setCameraSheetVisible] = useState(false);
+  const pendingTypeRef = useRef<string>('');
   const cropperRef = useRef<Cropper | null>(null);
   const editorImgRef = useRef<HTMLImageElement>(null);
 
@@ -88,13 +90,18 @@ export default function QuestionNew() {
     ? categoryIdPath.map((id) => categories.find((c) => String(c.id) === id)?.name).filter(Boolean).join(' / ')
     : '请选择章节';
 
-  const takePhoto = async (type: string) => {
+  const handleCameraAction = async (action: { key: string | number }) => {
+    setCameraSheetVisible(false);
+    const type = pendingTypeRef.current;
+    if (!type) return;
+
+    const source = action.key === 'camera' ? CameraSource.Camera : CameraSource.Photos;
     try {
       const photo = await Camera.getPhoto({
         quality: 90,
         allowEditing: false,
         resultType: CameraResultType.Uri,
-        source: CameraSource.Prompt,
+        source,
       });
       if (!photo.webPath) return;
       setEditorImage(photo.webPath);
@@ -244,12 +251,22 @@ export default function QuestionNew() {
       {currentSubjectId && (
         <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: 12, background: '#fff', borderTop: '1px solid #eee', zIndex: 100, display: 'flex', justifyContent: 'center', gap: 8 }}>
           {(['original_question', 'wrong_solution', 'reference_answer'] as const).map((t) => (
-            <Button key={t} color="primary" fill="outline" onClick={() => takePhoto(t)} loading={uploading}>
+            <Button key={t} color="primary" fill="outline" onClick={() => { pendingTypeRef.current = t; setCameraSheetVisible(true); }} loading={uploading}>
               {typeLabel[t]}
             </Button>
           ))}
         </div>
       )}
+
+      <ActionSheet
+        visible={cameraSheetVisible}
+        actions={[
+          { key: 'camera', text: '拍照' },
+          { key: 'photos', text: '从相册选择' },
+        ]}
+        onClose={() => setCameraSheetVisible(false)}
+        onAction={handleCameraAction}
+      />
 
       {editorVisible && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: '#000', display: 'flex', flexDirection: 'column' }}>
