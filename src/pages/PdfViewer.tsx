@@ -7,7 +7,10 @@ import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorkerSource from 'pdfjs-dist/build/pdf.worker.min.mjs?raw';
 import { getPdfUri, type PdfRecord } from '@/utils/pdfExport';
 
-const workerBlob = new Blob([pdfjsWorkerSource], { type: 'application/javascript' });
+// Inject polyfills into the worker source, then create a blob URL.
+// The worker runs in a separate module context that may lack Promise.withResolvers.
+const POLYFILL = `if(!Promise.withResolvers){Promise.withResolvers=function(){let r,e;return{promise:new Promise((a,s)=>{r=a;e=s}),resolve:r,reject:e}}};if(typeof structuredClone!=='function'){globalThis.structuredClone=o=>o===void 0?void 0:JSON.parse(JSON.stringify(o))};`;
+const workerBlob = new Blob([POLYFILL, pdfjsWorkerSource], { type: 'text/javascript' });
 const workerUrl = URL.createObjectURL(workerBlob);
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -59,7 +62,7 @@ export default function PdfViewer() {
           canvas.width = viewport.width;
           canvas.height = viewport.height;
 
-          await page.render({ canvas, viewport }).promise;
+          await page.render({ canvasContext: canvas.getContext('2d')!, viewport }).promise;
 
           if (cancelled) return;
           container.appendChild(canvas);
@@ -69,9 +72,10 @@ export default function PdfViewer() {
         if (!cancelled) setLoading(false);
       } catch (err: any) {
         if (!cancelled) {
-          console.error('PDF render error:', err);
-          setError('无法加载 PDF');
-          Toast.show({ content: '加载失败', icon: 'fail' });
+          const msg = err?.message || String(err);
+          console.error('PDF render error:', msg, err);
+          setError('无法加载 PDF: ' + msg);
+          Toast.show({ content: '加载失败: ' + msg, icon: 'fail' });
           setLoading(false);
         }
       }
